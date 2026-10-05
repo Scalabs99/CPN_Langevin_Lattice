@@ -1,0 +1,22 @@
+# Required parameters
+n_side_sites           =    30  # whole lattice will be (n_side_sites x n_side_sites) sites
+n_measurements         = 50000  # total number of measurements
+dt                     = 0.007  # single computer-time step amplitude
+n_indep_comps          =    33  # number of independent components.
+                                # The theory simulated will be O(N), where N = n_indep_comps + 1
+max_perturbative_order =    12  # maximum perturbative order.
+                                # The theory simulated will be up to order g^max_perturbative_order,
+                                # neglecting results of order g^(max_perturbative_order+1) or greater
+energy_filename        = "energies/energy.txt"        # path to energy filename
+checkpoint_filename    = "checkpoint/checkpoint.jld"  # path to checkpoint filename (only for first execution)
+vacuum_filename        = "config_vuoto_C.dat".        # vacuum filename 
+
+# Optional parameters
+measure_every              =          7  # number of measurements to skip between two saved measures. Default = 1
+n_copies                   =         10  # number of lattice copies to be simulated in parallel. Default = 1
+energy_site_by_site_matlab = "file.mat"  # name of the matlab file to save the energy site-by-site. Default = nothing
+max_saving_time            =        600  # time, in seconds, allocated to state saving before exiting. Default = 10 min
+# cuda_seed                =          0  # seed for the cuda rng. Default = nothing (random)
+# intBits   = 32  # Either 32 (for   Int32 variables on GPU) or 64 (for   Int64 variables on GPU). Default = 32
+# floatBits = 32  # Either 32 (for Float32 variables on GPU) or 64 (for Float64 variables on GPU). Default = 32
+    # If intBits != floatBits the program will output a warning, as there will be performance issues

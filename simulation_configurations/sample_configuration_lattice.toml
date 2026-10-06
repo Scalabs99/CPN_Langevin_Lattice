@@ -3,7 +3,7 @@ n_side_sites           =    30  # whole lattice will be (n_side_sites x n_side_s
 n_measurements         = 50000  # total number of measurements
 dt                     = 0.007  # single computer-time step amplitude
 n_indep_comps          =    33  # number of independent components.
-                                # The theory simulated will be O(N), where N = n_indep_comps + 1
+                                # The theory simulated will be CP(N-1), where N = n_indep_comps + 1
 max_perturbative_order =    12  # maximum perturbative order.
                                 # The theory simulated will be up to order g^max_perturbative_order,
                                 # neglecting results of order g^(max_perturbative_order+1) or greater

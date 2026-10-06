@@ -9,7 +9,7 @@ max_perturbative_order =    12  # maximum perturbative order.
                                 # neglecting results of order g^(max_perturbative_order+1) or greater
 energy_filename        = "energies/energy.txt"        # path to energy filename
 checkpoint_filename    = "checkpoint/checkpoint.jld"  # path to checkpoint filename (only for first execution)
-vacuum_filename        = "config_vuoto_C.dat".        # vacuum filename 
+vacuum_filename        = ""        # vacuum filename path -> if "" then the simulation starts with the trivial vacuum 
 
 # Optional parameters
 measure_every              =          7  # number of measurements to skip between two saved measures. Default = 1

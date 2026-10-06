@@ -4,9 +4,9 @@ using Combinatorics
 using Distributions
 using Serialization
 include("kernel_compilation.jl")
-include("read_write_funcs.jl")
+include("read_write_funcs_lattice.jl")
 include("CPN_kernels_lattice.jl")
-include("load_config.jl")
+include("load_config_lattice.jl")
 
 function initialize_M1!(M1_ker::Array{CompiledKernel})
     # Calcola una volta per tutte le matrici di twist 

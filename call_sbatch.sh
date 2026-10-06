@@ -1,9 +1,8 @@
 #!/bin/bash
 
-config_path="/hpc/home/daniele.scalabrini/CPN_Lang_Lattice/simulation_configurations" # path to simulation configuration files folder (without trailing /)
+config_path="/hpc/home/nome.cognome/CPN_Lang_Lattice/simulation_configurations" # path to simulation configuration files folder (without trailing /)
 config_fname="sample_configuration.toml" # name of simulation configuration file
-checkpt_path="/hpc/home/daniele.scalabrini/CPN_Lang_Lattice/checkpoint" # path to simulation checkpoint files folder (without trailing /)
-vacuum_path="/hpc/home/daniele.scalabrini/CPN_Lang_Lattice/vacuum" 
+checkpt_path="/hpc/home/nome.cognome/CPN_Lang_Lattice/checkpoint" # path to simulation checkpoint files folder (without trailing /)
 checkpt_fname="sample_checkpoint.jld" # name of simulation checkpoint file
 
 source configuration.conf

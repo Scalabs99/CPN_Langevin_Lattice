@@ -1,6 +1,6 @@
 using Dates
 
-include("CPN_LangRK.jl")
+include("CPN_lattice_LangRK.jl")
 
 function print_usage()
     println("Usage: $PROGRAM_FILE start config.toml")

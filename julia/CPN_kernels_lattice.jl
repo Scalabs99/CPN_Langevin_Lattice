@@ -447,7 +447,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         result::CuDeviceArray{F, 5 ,1}, i_a::I, k_a::I, i_b::I, k_b::I, 
         i_out::I, k_out::I, mu::I
     )
-        for n::I = 1:n_comps  
+        for n::I = 1:n_comps # z è di dimensione N_colors-1 = n_comps, mentre M è dimensione N_colors !!!!
             for j::I = 1:n_ptords
                 @inbounds result[I(1), j, i_out, k_out, n] = zero(F)
                 @inbounds result[I(2), j, i_out, k_out, n] = zero(F)
@@ -479,12 +479,13 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         # Firma: out(i,k), a(i_bwd, k_bwd), b(i,k)
         mult_sc_diffsites!(root, inv_root, sc_buffA, i_fwd, k_fwd, i, k, i, k)
         
-        # Background e Matrice di Twist M^\dagger(x-mu) [Ordine g^0]
+        # Background e Matrice di Twist M(x) [Ordine g^0]
         idx_N = n_comps + I(1)
         ratio_vac = nu_vac[I(1), i_fwd, k_fwd, idx_N] / nu_vac[I(1), i, k, idx_N]
         
-        M_re =  M[I(1), I(1), i, k, mu, idx_N]
-        M_im =  M[I(2), I(1), i, k, mu, idx_N] # Segno meno per l'Hermitiano coniugato
+        # Nel termine forward compare la matrice M1 non coniugata 
+        M_re =  M[I(1), I(1), i, k, mu, idx_N] # La matrice è zero a tutti gli ordine superiori a quello banale 
+        M_im =  M[I(2), I(1), i, k, mu, idx_N] # questi sono gli ultimi elementi della matrice di twist 
 
         for j::I = 1:n_ptords
             val = sc_buffA[j, i, k] * ratio_vac
@@ -492,7 +493,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             @inbounds c_sc_buffA[I(2), j, i, k] = val * M_im
         end 
 
-       #Moltiplicazione per U_mu^\dagger(x-mu)
+       #Moltiplicazione per U_mu(x)
         for j::I = 1:n_ptords
             @inbounds c_sc_buffB[I(1), j, i, k] = zero(F)
             @inbounds c_sc_buffB[I(2), j, i, k] = zero(F)
@@ -502,8 +503,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 A_re = c_sc_buffA[I(1), l, i, k]
                 A_im = c_sc_buffA[I(2), l, i, k]
                 
-                # Link di gauge valutato in x-mu (e CONIUGATO)
-                U_re =  U[I(1), j-l+I(1), i, k, mu]
+                # Link di gauge valutato in x (non coniugato)
+                U_re =  U[I(1), j-l+I(1), i, k, mu] 
                 U_im =  U[I(2), j-l+I(1), i, k, mu] 
                 
                 @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im)
@@ -557,7 +558,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu]
                 U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im)
+                @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
                 @inbounds c_sc_buffB[I(2), j, i, k] -= F(0.5) * (A_re * U_im + A_im * U_re)
             end
         end
@@ -685,7 +686,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 end 
             end 
 
-            for mu::I = 1:2
+            for mu::I = 1:2 # ---> mu = 1 è la direzione temporale 
     
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
@@ -722,7 +723,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root_zscaled2::CuDeviceArray{F, 3, 1},
         nu_vacuum::CuDeviceArray{F, 4, 1}, 
     )
-
+        # Calcola -gradient_U
         i, k = get_indexes()
 
         if (i <= Npoint && k <= Npoint) 
@@ -749,7 +750,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                         G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
                         G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        grad_U_mu[j, i, k, mu] += Uconj_mu_Re * G1_Im + Uconj_mu_Im * G1_Re 
+                        grad_U_mu[j, i, k, mu] += Uconj_mu_Re * G1_Im + Uconj_mu_Im * G1_Re # la forza è solo la parte immaginaria 
                     end 
                 end 
             end 

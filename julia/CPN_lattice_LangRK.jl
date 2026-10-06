@@ -266,7 +266,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     invroot_z2 = CuArray{F}(undef, n_ords, Npoint, Npoint, n_copies)
     noise_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
-    M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, N_colors, n_copies)
+    M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), N_colors, n_copies)
 
     energia = CUDA.zeros(F, n_ords, n_copies)
     ener = CUDA.zeros(F, n_ords, Npoint, Npoint, n_copies)

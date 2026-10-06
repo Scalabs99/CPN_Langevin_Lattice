@@ -18,8 +18,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
     n_ptords = max_ptord + one(I) # total number of perturbative orders
     unity = CUDA.zeros(F, n_ptords)
     @inbounds CUDA.@allowscalar unity[1] = one(F)
-    coupling = CUDA.zeros(F, n_ptords, Npoint, Npoint)
-    @inbounds CUDA.@allowscalar coupling[2,:,:] .= one(F)
     
     # Buffers used in computations
     vec_buffer_comp = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_comps)
@@ -386,6 +384,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         i, k = get_indexes() 
         
         if (i <= Npoint && k <= Npoint)
+
+            N_colors = n_comps + one(n_comps)
             for mu::I = 1:2 # 1 è la direzione temporale, 2 è la direzione spaziale. 
                 for n::I = 1:N_colors
                     for j::I = 1:n_ptords
@@ -650,7 +650,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                         G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
                         G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        ener[j, i, k] -= Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im - F(2)
+                        ener[j, i, k] -= Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im - F(2) * unity[j]
                     end 
                 end 
             end 

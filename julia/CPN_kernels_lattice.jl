@@ -80,9 +80,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         # ma sono scalari quindi non c'è l'indice di componente
         # reset_sc!(result, i, k)
         for j::I = 1:n_ptords
-            @inbounds result[j, i, k] = zero(F)
+            @inbounds result[j, i_out, k_out] = zero(F)
             for l::I = 1:j
-                @inbounds result[j, i, k] += a[l, i, k] * b[j-l+one(I), i, k]
+                @inbounds result[j, i_out, k_out] += a[l, i_a, k_a] * b[j-l+one(I), i_b, k_b]
             end
         end
         return

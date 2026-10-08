@@ -26,12 +26,12 @@ function compute_gradients!(
     roots_ker::Array{CompiledKernel},
 )
     # Questa funzione calcola -grad_U e -grad_z
-    CUDA.@sync begin  
+    CUDA.@sync begin  # Calcola z riscalato per il vuoto e poi lo eleva alla seconda 
         for i in eachindex(zscaled2_ker)  
             @inbounds run_kernel(zscaled2_ker[i])
         end
     end
-    CUDA.@sync begin
+    CUDA.@sync begin # Calcola la radice e l'inverso della radice 
         for i in eachindex(roots_ker)
             @inbounds run_kernel(roots_ker[i])
         end 
@@ -85,7 +85,7 @@ function Euler_step_U!(
     noise_X::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
-    zero_modo_X::CuArray{F, 5}, 
+    zero_modo_X::CuArray{F, 3}, 
     ExpU_Eu_ker::Array{CompiledKernel},
     zero_modeX_ker::Array{CompiledKernel}, 
     N_colors::I, 
@@ -101,7 +101,7 @@ function Euler_step_U!(
     CUDA.@sync @views X[2:end, :, :, :, :] .= ((F(N_colors) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
 
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
-    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3)) ./ Npoint2
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
     CUDA.@sync begin 
@@ -142,7 +142,7 @@ function RK_evolution_U!(
     noise_X::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
-    zero_modo_X::CuArray{F, 5}, 
+    zero_modo_X::CuArray{F, 3}, 
     ExpU_ker::Array{CompiledKernel},
     zero_modeX_ker::Array{CompiledKernel},
     N_colors::I, 
@@ -157,7 +157,7 @@ function RK_evolution_U!(
     CUDA.@sync @views X[2:end,:,:,:,:] .= (F(N_colors) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
 
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
-    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3)) ./ Npoint2
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
     CUDA.@sync begin 
@@ -215,7 +215,7 @@ end
 
 @inline function reset_noise_X!(noise_X::CuArray{F, 5}, rng::CUDA.RNG) where {F <: AbstractFloat}
     CUDA.fill!(noise_X, zero(F))
-    @inbounds @views CUDA.randn!(rng, noise_X[2,:,:,:,:])
+    @inbounds @views CUDA.randn!(rng, noise_X[2,:,:,:,:]) # X è reale!!! 
     return nothing
 end
 
@@ -429,7 +429,7 @@ function launch_main_Lang(config_fname::String)
 
     floatType = typeof(conf.dt)
     n_ords = conf.max_ptord + one(conf.max_ptord)
-    N_colors = conf.n_comps + 1
+    N_colors = conf.n_comps + one(conf.n_comps)
     
     nu_cpu, U_vac_cpu = load_C_config(conf.vac_fname, conf.Npoint, N_colors)
     nu_vacuum = CuArray(floatType.(nu_cpu))

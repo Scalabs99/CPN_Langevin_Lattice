@@ -371,12 +371,14 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
 
         if t == args.iter_start
             println("--- DIAGNOSTICA STEP $t ---")
-            for ord in 1:n_ords
-                nz = CUDA.norm(@view z[:, ord, :, :, :, 1])
-                nx = CUDA.norm(@view X[ord, :, :, :, 1])
-                ne = CUDA.norm(@view ener[ord, :, :, 1])
-                println("Ordine $ord -> Norma z: $nz | Norma X: $nx | Norma ener: $ne")
-            end
+            for p::I = 1:n_copies 
+                for ord::I = 1:n_ords
+                    nz = CUDA.norm(@view z[:, ord, :, :, :, p])
+                    nx = CUDA.norm(@view X[ord, :, :, :, p])
+                    ne = CUDA.norm(@view ener[ord, :, :, p])
+                    println("Ordine $ord -> Norma z: $nz | Norma X: $nx | Norma ener: $ne")
+                end
+            end 
         end
         
         compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener_ker)

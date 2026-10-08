@@ -351,13 +351,13 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             CUDA.@sync @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
-            compute_gradients!(grad_ker_z, grad_ker_U, zscaled2_ker, roots_ker)
+            compute_gradients!(gradker_z, gradker_U, zscaled2_ker, roots_ker)
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_Eu_ker, zero_mode_X_ker, N_colors, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, N_colors)
             
             # Calcola ora i gradienti per lo step RK 
-            compute_gradients!(grad_ker_z_Eu, grad_ker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
+            compute_gradients!(gradker_z_Eu, gradker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
             RK_evolution_U!(U, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zero_mode_X_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
             # Sottrai lo zero mode da z alla fine di ogni singolo step per evitare il drift

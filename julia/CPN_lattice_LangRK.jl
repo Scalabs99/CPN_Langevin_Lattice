@@ -369,7 +369,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             end
         end
         
-        compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener)
+        compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener_ker)
            
         
         # Store energy measurements if saving lattice

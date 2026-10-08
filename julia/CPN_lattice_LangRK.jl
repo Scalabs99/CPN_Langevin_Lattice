@@ -178,7 +178,7 @@ function compute_energy!(
     Npoint2::I,
     zscaled2_ker::Array{CompiledKernel},
     roots_ker::Array{CompiledKernel},
-    compute_ener::Array{CompiledKernel},
+    compute_ener_ker::Array{CompiledKernel},
     ) where {F <: AbstractFloat, I <: Integer}
     # computes the mean of the energy of all sites at time t
 
@@ -286,7 +286,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     ExpU_Eu_ker = Array{CompiledKernel}(undef, n_copies); 
     zero_mode_z_ker = Array{CompiledKernel}(undef, n_copies); 
     zero_mode_X_ker = Array{CompiledKernel}(undef, n_copies); 
-    compute_ener = Array{CompiledKernel}(undef, n_copies); 
+    compute_ener_ker = Array{CompiledKernel}(undef, n_copies); 
 
     en_fnames = [en_fname]
     for i in 2:n_copies

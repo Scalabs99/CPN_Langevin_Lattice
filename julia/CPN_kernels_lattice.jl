@@ -22,12 +22,10 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
     
     # Buffers used in computations
     vec_buffer_comp = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_comps)
-    scalar_buffs = CuArray{F}(undef, n_ptords, Npoint, Npoint, 2)
-    @inbounds sc_buffA = @view scalar_buffs[:,:,:,1]
-    @inbounds sc_buffB = @view scalar_buffs[:,:,:,2]
-    cmplx_scalar_buffs = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, 2)
-    @inbounds c_sc_buffA = @view cmplx_scalar_buffs[:,:,:,:,1]
-    @inbounds c_sc_buffB = @view cmplx_scalar_buffs[:,:,:,:,2]
+    sc_buffA        = CuArray{F}(undef, n_ptords, Npoint, Npoint)
+    sc_buffB        = CuArray{F}(undef, n_ptords, Npoint, Npoint)
+    c_sc_buffA      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint)
+    c_sc_buffB      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint)
 
     @inline function set_unity!(v::CuDeviceArray{F, 3, 1}, i::I, k::I) 
         for j::I = 2:n_ptords
@@ -150,7 +148,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     @inbounds u_im = U[I(2), j-l+I(1), i_b, k_b, mu]
 
                     @inbounds result[I(1), j, i_out, k_out, n] += (z_re * u_re + z_im * u_im)
-                    @inbounds result[I(2), j, i_out, k_out, n] += (z_re * u_im - z_im * u_re)
+                    @inbounds result[I(2), j, i_out, k_out, n] += (z_im * u_re - z_re * u_im)
                 end 
             end 
         end 
@@ -234,22 +232,23 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
             for mu::I = 1:2 
                 complex_exponential_taylor!(X, Exp, i, k, mu, sc_buffA, sc_buffB)
-             
-                for j::I = 1:n_ptords 
-                    @inbounds ExpU[I(1), j, i, k, mu] = zero(F)
-                    @inbounds ExpU[I(2), j, i, k, mu] = zero(F)
+     
+                for j::I = n_ptords:-1:1 
+                    res_Re = zero(F)
+                    res_Im = zero(F)
                     for l::I = 1:j 
                         @inbounds Exp_Re = Exp[I(1), l, i, k, mu]
                         @inbounds Exp_Im = Exp[I(2), l, i, k, mu]
                         @inbounds U_Re = U[I(1), j-l+I(1), i, k, mu]
                         @inbounds U_Im = U[I(2), j-l+I(1), i, k, mu]
 
-                        @inbounds ExpU[I(1), j, i, k, mu] += Exp_Re * U_Re - Exp_Im * U_Im 
-                        @inbounds ExpU[I(2), j, i, k, mu] += Exp_Re * U_Im + Exp_Im * U_Re
+                        res_Re += Exp_Re * U_Re - Exp_Im * U_Im 
+                        res_Im += Exp_Re * U_Im + Exp_Im * U_Re
                     end 
+                    @inbounds ExpU[I(1), j, i, k, mu] = res_Re
+                    @inbounds ExpU[I(2), j, i, k, mu] = res_Im
                 end 
-
-            end 
+            end
             
         end 
         return nothing 
@@ -391,7 +390,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 for n::I = 1:N_colors
                     for j::I = 1:n_ptords
                         @inbounds M1[I(1), j, i, k, mu, n] = zero(F)
-                        @inbounds M1[I(1), j, i, k, mu, n] = zero(F)
+                        @inbounds M1[I(2), j, i, k, mu, n] = zero(F)
                     end
                 end
             end
@@ -459,21 +458,18 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     @inbounds M_im = M[I(2), j-l+I(1), i_b, k_b, mu, n]
 
                     @inbounds result[I(1), j, i_out, k_out, n] += (z_re * M_re + z_im * M_im)
-                    @inbounds result[I(2), j, i_out, k_out, n] += (z_re * M_im - z_im * M_re)
+                    @inbounds result[I(2), j, i_out, k_out, n] += (z_im * M_re - z_re * M_im)
                 end 
             end 
         end 
         return 
     end 
 
-     @inline function fwd_corrective_term!(
+    @inline function fwd_corrective_term!(
         root::CuDeviceArray{F, 3, 1}, inv_root::CuDeviceArray{F, 3, 1}, 
         z::CuDeviceArray{F, 5 ,1}, U::CuDeviceArray{F, 5, 1}, result::CuDeviceArray{F, 5, 1}, 
         i::I, k::I, i_fwd::I, k_fwd::I,    
-        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I,
-        sc_buffA::CuDeviceArray{F, 3, 1}, 
-        c_sc_buffA::CuDeviceArray{F, 4, 1}, 
-        c_sc_buffB::CuDeviceArray{F, 4, 1} # Buffer aggiuntivo necessario per la doppia convoluzione
+        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I
     )
         
         # Rapporto z^N(x+mu) / z^N(x) 
@@ -482,14 +478,14 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         
         # Background e Matrice di Twist M(x) [Ordine g^0]
         idx_N = n_comps + I(1)
-        ratio_vac = nu_vac[I(1), i_fwd, k_fwd, idx_N] / nu_vac[I(1), i, k, idx_N]
+        @inbounds ratio_vac = nu_vac[I(1), i_fwd, k_fwd, idx_N] / nu_vac[I(1), i, k, idx_N]
         
         # Nel termine forward compare la matrice M1 non coniugata 
-        M_re =  M[I(1), I(1), i, k, mu, idx_N] # La matrice è zero a tutti gli ordine superiori a quello banale 
-        M_im =  M[I(2), I(1), i, k, mu, idx_N] # questi sono gli ultimi elementi della matrice di twist 
+        @inbounds M_re =  M[I(1), I(1), i, k, mu, idx_N] # La matrice è zero a tutti gli ordine superiori a quello banale 
+        @inbounds M_im =  M[I(2), I(1), i, k, mu, idx_N] # questi sono gli ultimi elementi della matrice di twist 
 
         for j::I = 1:n_ptords
-            val = sc_buffA[j, i, k] * ratio_vac
+            @inbounds val = sc_buffA[j, i, k] * ratio_vac
             @inbounds c_sc_buffA[I(1), j, i, k] = val * M_re
             @inbounds c_sc_buffA[I(2), j, i, k] = val * M_im
         end 
@@ -501,12 +497,12 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             
             for l::I = 1:j
                 # Prefattore calcolato al passo precedente
-                A_re = c_sc_buffA[I(1), l, i, k]
-                A_im = c_sc_buffA[I(2), l, i, k]
+                @inbounds A_re = c_sc_buffA[I(1), l, i, k]
+                @inbounds A_im = c_sc_buffA[I(2), l, i, k]
                 
                 # Link di gauge valutato in x (non coniugato)
-                U_re =  U[I(1), j-l+I(1), i, k, mu] 
-                U_im =  U[I(2), j-l+I(1), i, k, mu] 
+                @inbounds U_re =  U[I(1), j-l+I(1), i, k, mu] 
+                @inbounds U_im =  U[I(2), j-l+I(1), i, k, mu] 
                 
                 @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im)
                 @inbounds c_sc_buffB[I(2), j, i, k] -= F(0.5) * (A_re * U_im + A_im * U_re)
@@ -522,10 +518,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root::CuDeviceArray{F, 3, 1}, inv_root::CuDeviceArray{F, 3, 1}, 
         z::CuDeviceArray{F, 5 ,1}, U::CuDeviceArray{F, 5, 1}, result::CuDeviceArray{F, 5, 1}, 
         i::I, k::I, i_bwd::I, k_bwd::I,    
-        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I,
-        sc_buffA::CuDeviceArray{F, 3, 1}, 
-        c_sc_buffA::CuDeviceArray{F, 4, 1}, 
-        c_sc_buffB::CuDeviceArray{F, 4, 1} # Buffer aggiuntivo necessario per la doppia convoluzione
+        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I
     )
         
         # Rapporto z^N(x-mu) / z^N(x) 
@@ -534,13 +527,13 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         
         # Background e Matrice di Twist M^\dagger(x-mu) [Ordine g^0]
         idx_N = n_comps + I(1)
-        ratio_vac = nu_vac[I(1), i_bwd, k_bwd, idx_N] / nu_vac[I(1), i, k, idx_N]
+        @inbounds ratio_vac = nu_vac[I(1), i_bwd, k_bwd, idx_N] / nu_vac[I(1), i, k, idx_N]
         
-        M_re =  M[I(1), I(1), i_bwd, k_bwd, mu, idx_N]
-        M_im = -M[I(2), I(1), i_bwd, k_bwd, mu, idx_N] # Segno meno per l'Hermitiano coniugato
+        @inbounds M_re =  M[I(1), I(1), i_bwd, k_bwd, mu, idx_N]
+        @inbounds M_im = -M[I(2), I(1), i_bwd, k_bwd, mu, idx_N] # Segno meno per l'Hermitiano coniugato
 
         for j::I = 1:n_ptords
-            val = sc_buffA[j, i, k] * ratio_vac
+            @inbounds val = sc_buffA[j, i, k] * ratio_vac
             @inbounds c_sc_buffA[I(1), j, i, k] = val * M_re
             @inbounds c_sc_buffA[I(2), j, i, k] = val * M_im
         end 
@@ -552,15 +545,15 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             
             for l::I = 1:j
                 # Prefattore calcolato al passo precedente
-                A_re = c_sc_buffA[I(1), l, i, k]
-                A_im = c_sc_buffA[I(2), l, i, k]
+                @inbounds A_re = c_sc_buffA[I(1), l, i, k]
+                @inbounds A_im = c_sc_buffA[I(2), l, i, k]
                 
                 # Link di gauge valutato in x-mu 
-                U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu]
-                U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu] 
+                @inbounds U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu]
+                @inbounds U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu] 
                 
                 @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
-                @inbounds c_sc_buffB[I(2), j, i, k] -= F(0.5) * (A_re * U_im + A_im * U_re)
+                @inbounds c_sc_buffB[I(2), j, i, k] -= F(0.5) * (A_im * U_re + A_re * U_im) # --> occhio qua --> adesso è giusto ma prima dava -Im
             end
         end
 
@@ -584,7 +577,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     @inbounds conjMz_im = conjMz[I(2), j-l+I(1), i_b, k_b, n]
 
                     @inbounds result[I(1), j, i_out, k_out] += (z_bar_re * conjMz_re - z_bar_im * conjMz_im)
-                    @inbounds result[I(2), j, i_out, k_out] += (z_bar_re * conjMz_im + z_bar_im * conjMz_re)
+                    @inbounds result[I(2), j, i_out, k_out] += (z_bar_re * conjMz_im + z_bar_im * conjMz_re) 
                 end 
 
             end 
@@ -594,21 +587,21 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
     @inline function cmplx_G1_func!(z::CuDeviceArray{F, 5, 1}, root::CuDeviceArray{F, 3, 1}, 
         M::CuDeviceArray{F, 6, 1}, nu_vac::CuDeviceArray{F, 4, 1}, G1::CuDeviceArray{F, 4, 1}, 
-        vec_buff::CuDeviceArray{F, 5, 1}, sc_buff::CuDeviceArray{F, 3, 1}, i::I, k::I, i_fwd::I, k_fwd::I, mu::I
+        i::I, k::I, i_fwd::I, k_fwd::I, mu::I
     )   
         
-        mult_z_by_Mconj!(z, M, vec_buff, i, k, i, k, i, k, mu)
-        cmplx_scalar_prod!(z, vec_buff, G1, i_fwd, k_fwd, i, k, i, k)
+        mult_z_by_Mconj!(z, M, vec_buffer_comp, i, k, i, k, i, k, mu)
+        cmplx_scalar_prod!(z, vec_buffer_comp, G1, i_fwd, k_fwd, i, k, i, k)
         
         idx_N = n_comps + I(1) 
-        prod_nu_fwd = nu_vac[I(1), i_fwd, k_fwd, idx_N] * nu_vac[I(1), i, k, idx_N] 
-        MconjRe = M[I(1), I(1), i, k, idx_N, mu]
-        MconjIm = -M[I(2), I(1), i, k, idx_N, mu]
+        @inbounds prod_nu_fwd = nu_vac[I(1), i_fwd, k_fwd, idx_N] * nu_vac[I(1), i, k, idx_N] 
+        @inbounds MconjRe = M[I(1), I(1), i, k, mu, idx_N]
+        @inbounds MconjIm = -M[I(2), I(1), i, k, mu, idx_N]
         
-        mult_sc_diffsites!(root, root, sc_buff, i, k, i_fwd, k_fwd, i, k)
+        mult_sc_diffsites!(root, root, sc_buffA, i, k, i_fwd, k_fwd, i, k)
         for j::I = 1:n_ptords 
-            G1[I(1), j, i, k] += prod_nu_fwd * MconjRe * sc_buff[j, i, k]
-            G1[I(2), j, i, k] += prod_nu_fwd * MconjIm * sc_buff[j, i, k]
+            @inbounds G1[I(1), j, i, k] += prod_nu_fwd * MconjRe * sc_buffA[j, i, k]
+            @inbounds G1[I(2), j, i, k] += prod_nu_fwd * MconjIm * sc_buffA[j, i, k]
         end 
 
          
@@ -642,16 +635,16 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: Up/Down)
                     i_fwd, k_fwd = i_up, k_up
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, vec_buffer_comp, c_sc_buffB, i, k, i_fwd, k_fwd, mu)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
                 
                 for j::I=1:n_ptords 
                     for l::I = 1:j
-                        Uconj_mu_Re = U_mu[I(1), l, i, k, mu]
-                        Uconj_mu_Im = -U_mu[I(2), l, i, k, mu]
-                        G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
-                        G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
+                        @inbounds Uconj_mu_Re = U_mu[I(1), l, i, k, mu]
+                        @inbounds Uconj_mu_Im = -U_mu[I(2), l, i, k, mu]
+                        @inbounds G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
+                        @inbounds G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        ener[j, i, k] -= Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im - F(2) * unity[j]
+                        @inbounds ener[j, i, k] -= Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im - F(2) * unity[j]
                     end 
                 end 
             end 
@@ -706,8 +699,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 mult_z_by_M!(z, M1, vec_buffer_comp, i_fwd, k_fwd, i, k, i, k, mu)
                 mult_compvec_by_U!(vec_buffer_comp, U_mu, gradient_z, i, k, i, k, i, k, mu)
 
-                fwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_fwd, k_fwd, nu_vacuum, M1, mu, sc_buffA, c_sc_buffA, c_sc_buffB)
-                bwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_bwd, k_bwd, nu_vacuum, M1, mu, sc_buffA, c_sc_buffA, c_sc_buffB)
+                fwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_fwd, k_fwd, nu_vacuum, M1, mu)
+                bwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_bwd, k_bwd, nu_vacuum, M1, mu)
 
 
             end 
@@ -741,17 +734,17 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: Up/Down)
                     i_fwd, k_fwd = i_up, k_up
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, vec_buffer_comp, c_sc_buffB, i, k, i_fwd, k_fwd, mu)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
                 
                 for j::I=1:n_ptords 
                     @inbounds grad_U_mu[j, i, k, mu] = zero(F)
                     for l::I = 1:j
-                        Uconj_mu_Re = U_mu[I(1), l, i, k, mu]
-                        Uconj_mu_Im = -U_mu[I(2), l, i, k, mu]
-                        G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
-                        G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
+                        @inbounds Uconj_mu_Re = U_mu[I(1), l, i, k, mu]
+                        @inbounds Uconj_mu_Im = -U_mu[I(2), l, i, k, mu]
+                        @inbounds G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
+                        @inbounds G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        grad_U_mu[j, i, k, mu] += Uconj_mu_Re * G1_Im + Uconj_mu_Im * G1_Re # la forza è solo la parte immaginaria 
+                        @inbounds grad_U_mu[j, i, k, mu] += Uconj_mu_Re * G1_Im + Uconj_mu_Im * G1_Re # la forza è solo la parte immaginaria 
                     end 
                 end 
             end 

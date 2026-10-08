@@ -170,8 +170,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
     end
 
     @inline function complex_exponential_taylor!(
-        X::CuDeviceArray{F, 4, 1}  #Array reale 
-        E::CuDeviceArray{F, 5, 1}  #Risultato: esponenziale complesso 
+        X::CuDeviceArray{F, 4, 1},  #Array reale 
+        E::CuDeviceArray{F, 5, 1}, #Risultato: esponenziale complesso 
         i::I, k::I, mu::I,
         potenza_corrente::CuDeviceArray{F, 3, 1},
         temp::CuDeviceArray{F, 3, 1}
@@ -722,7 +722,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         z::CuDeviceArray{F, 5, 1}, 
         M1::CuDeviceArray{F, 6, 1}, 
         root_zscaled2::CuDeviceArray{F, 3, 1},
-        nu_vacuum::CuDeviceArray{F, 4, 1}, 
+        nu_vacuum::CuDeviceArray{F, 4, 1}
     )
         # Calcola -gradient_U
         i, k = get_indexes()

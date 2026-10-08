@@ -264,7 +264,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         if (i <= Npoint && k <= Npoint)
             # Estrai il valore del vuoto per la componente N-esima
             idx_N = n_comps + I(1)
-            val_vac = nu_vacuum[I(1), i, k, idx_N]
+            @inbounds val_vac = nu_vacuum[I(1), i, k, idx_N]
             val_vac2 = val_vac * val_vac # Modulo quadro del vuoto classico
         
             # Inizializza a zero l'accumulatore per tutti gli ordini
@@ -644,7 +644,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                         @inbounds G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
                         @inbounds G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        @inbounds ener[j, i, k] -= Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im - F(2) * unity[j]
+                        @inbounds ener[j, i, k] -= F(2) * (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im) - F(2) * unity[j]
                     end 
                 end 
             end 

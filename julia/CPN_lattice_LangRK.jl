@@ -276,14 +276,16 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     M1_ker = Array{CompiledKernel}(undef, n_copies)
     zscaled2_ker = Array{CompiledKernel}(undef, n_copies); 
     roots_ker = Array{CompiledKernel}(undef, n_copies); 
+    zscaled2_ker_Eu = Array{CompiledKernel}(undef, n_copies);
+    roots_ker_Eu = Array{CompiledKernel}(undef, n_copies);
     gradker_z = Array{CompiledKernel}(undef, n_copies); 
     gradker_z_Eu = Array{CompiledKernel}(undef, n_copies); 
     gradker_U = Array{CompiledKernel}(undef, n_copies); 
     gradker_U_Eu = Array{CompiledKernel}(undef, n_copies); 
     ExpU_ker = Array{CompiledKernel}(undef, n_copies); 
     ExpU_Eu_ker = Array{CompiledKernel}(undef, n_copies); 
-    zero_mode_z = Array{CompiledKernel}(undef, n_copies); 
-    zero_mode_X = Array{CompiledKernel}(undef, n_copies); 
+    zero_mode_z_ker = Array{CompiledKernel}(undef, n_copies); 
+    zero_mode_X_ker = Array{CompiledKernel}(undef, n_copies); 
     compute_ener = Array{CompiledKernel}(undef, n_copies); 
 
     en_fnames = [en_fname]
@@ -317,12 +319,14 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
         @inbounds gradker_U[i] = compile_kernel(f_grad_U, (gradient_U[:,:,:,:,i], U[:,:,:,:,:,i], z[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum), Npoint2)
         @inbounds ExpU_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U[:,:,:,:,:,i]), Npoint2)
         
+        @inbounds zscaled2_ker_Eu[i] = compile_kernel(f_z2, (z_Eu[:,:,:,:,:,i], nu_vacuum, zscaled2[:,:,:,i]), Npoint2)
+        @inbounds roots_ker_Eu[i] = compile_kernel(f_roots, (zscaled2[:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i]), Npoint2)
         @inbounds gradker_z_Eu[i] = compile_kernel(f_grad_z, (z_Eu[:,:,:,:,:,i], nu_vacuum, U_Eu[:,:,:,:,:,i], gradz_Eu[:,:,:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], M1[:,:,:,:,:,:,i]), Npoint2)
         @inbounds gradker_U_Eu[i] = compile_kernel(f_grad_U, (gradU_Eu[:,:,:,:,i], U_Eu[:,:,:,:,:,i], z_Eu[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum), Npoint2)
         @inbounds ExpU_Eu_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U_Eu[:,:,:,:,:,i]), Npoint2)
   
         @inbounds zero_mode_z_ker[i] = compile_kernel(f_zeromode_z, (z[:,:,:,:,:,i], zero_modo_z[:,:,:,i]), Npoint2)
-        @inbounds zero_modeX_ker[i] = compile_kernel(f_zeromode_X, (X[:,:,:,:,i], zero_modo_X[:,:,i]), Npoint2)
+        @inbounds zero_mode_X_ker[i] = compile_kernel(f_zeromode_X, (X[:,:,:,:,i], zero_modo_X[:,:,i]), Npoint2)
         @inbounds compute_ener_ker[i] = compile_kernel(f_ener, (z[:,:,:,:,:,i], U[:,:,:,:,:,i], ener[:,:,:,i], root_z2[:,:,:,i], M1[:,:,:,:,:,:,i], nu_vacuum), Npoint2)
     end
 
@@ -341,7 +345,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             reset_noise_X!(noise_X, cuda_rng)
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
-            noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4))./ Npoint2
+            noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
             noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:], dims=(2, 3)) ./ Npoint2
             CUDA.@sync @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
             CUDA.@sync @inbounds @views noise_X[2:2,:,:,:] .-= noise_mean_X
@@ -349,18 +353,18 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(grad_ker_z, grad_ker_U, zscaled2_ker, roots_ker)
             # Fai gli step di Eulero per i due campi 
-            Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_Eu_ker, zero_modeX_ker, N_colors, Npoint2)
+            Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_Eu_ker, zero_mode_X_ker, N_colors, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, N_colors)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(grad_ker_z_Eu, grad_ker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
-            RK_evolution_U!(U, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zero_modeX_ker, N_colors, Npoint2)
+            RK_evolution_U!(U, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zero_mode_X_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
             # Sottrai lo zero mode da z alla fine di ogni singolo step per evitare il drift
             CUDA.@sync @inbounds @views zero_modo_z[:,2:end,:,:] .= CUDA.sum(z[:,2:end,:,:,:,:], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
             CUDA.@sync begin 
-                for i in eachindex(zero_mode_z)
-                    @inbounds run_kernel(zero_mode_z[i])
+                for i in eachindex(zero_mode_z_ker)
+                    @inbounds run_kernel(zero_mode_z_ker[i])
                 end 
             end
         end

@@ -16,6 +16,7 @@ using CUDA
 function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F <: AbstractFloat, I <: Integer}
 
     n_ptords = max_ptord + one(I) # total number of perturbative orders
+    N_colors = n_comps + one(n_comps) #total number of colors 
     unity = CUDA.zeros(F, n_ptords)
     @inbounds CUDA.@allowscalar unity[1] = one(F)
     
@@ -385,7 +386,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         
         if (i <= Npoint && k <= Npoint)
 
-            N_colors = n_comps + one(n_comps)
+            
             for mu::I = 1:2 # 1 è la direzione temporale, 2 è la direzione spaziale. 
                 for n::I = 1:N_colors
                     for j::I = 1:n_ptords

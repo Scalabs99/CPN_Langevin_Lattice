@@ -629,11 +629,11 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             for mu::I = 1:2
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
-                    # Direzione 1 (es. Temporale: Right/Left)
-                    i_fwd, k_fwd = i_dx, k_dx
+                    # Direzione 1 (es. Temporale: up/down)
+                    i_fwd, k_fwd = i_up, k # Mi muovo avanti nella direzione temporale
                 else
-                    # Direzione 2 (es. Spaziale: Up/Down)
-                    i_fwd, k_fwd = i_up, k_up
+                    # Direzione 2 (es. Spaziale: right/left)
+                    i_fwd, k_fwd = i, k_dx # Mi muovo avanti in quella spaziale 
                 end 
                 cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
                 
@@ -684,13 +684,13 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
     
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
-                    # Direzione 1 (es. Temporale: Right/Left)
-                    i_fwd, k_fwd = i_dx, k_dx
-                    i_bwd, k_bwd = i_sx, k_sx
+                    # Direzione 1 (es. Temporale: up/down)
+                    i_fwd, k_fwd = i_up, k
+                    i_bwd, k_bwd = i_dw, k
                 else
-                    # Direzione 2 (es. Spaziale: Up/Down)
-                    i_fwd, k_fwd = i_up, k_up
-                    i_bwd, k_bwd = i_dw, k_dw
+                    # Direzione 2 (es. Spaziale: right/left)
+                    i_fwd, k_fwd = i, k_dx
+                    i_bwd, k_bwd = i, k_sx
                 end 
 
                 mult_z_by_Mconj!(z, M1, vec_buffer_comp, i_bwd, k_bwd, i_bwd, k_bwd, i, k, mu)
@@ -728,11 +728,11 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             for mu::I = 1:2
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
-                    # Direzione 1 (es. Temporale: Right/Left)
-                    i_fwd, k_fwd = i_dx, k_dx
+                    # Direzione 1 (es. Temporale: up/down)
+                    i_fwd, k_fwd = i_up, k
                 else
-                    # Direzione 2 (es. Spaziale: Up/Down)
-                    i_fwd, k_fwd = i_up, k_up
+                    # Direzione 2 (es. Spaziale: right/left)
+                    i_fwd, k_fwd = i, k_dx
                 end 
                 cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
                 

@@ -95,18 +95,18 @@ function save_matlab_energy(lat_fname::String, lat)
     return
 end
 
-function load_C_config(vac_fname::String, Npoint::Int, N_colors::Int)
-    nu_cpu = zeros(Float64, 2, Npoint, Npoint, N_colors)
-    U_cpu  = zeros(Float64, 2, Npoint, Npoint, 2)
+function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) where{F <: AbstractFloat, I <: Integer}
+    nu_cpu = zeros(F, 2, Npoint, Npoint, N_colors)
+    U_cpu  = zeros(F, 2, Npoint, Npoint, 2)
 
     if vac_fname == ""
         println(current_time(), "[INFO]: Nessun file del vuoto specificato. Inizializzazione al vuoto banale.")
         
         # Vuoto banale per Z: parte reale [indice 1] dell'ultimo "colore" [N_colors] uguale a 1
-        nu_cpu[1, :, :, N_colors] .= 1.0 
+        nu_cpu[1, :, :, N_colors] .= F(1)
         
         # Vuoto banale per U: parte reale [indice 1] di tutti i link uguale a 1
-        U_cpu[1, :, :, :] .= 1.0
+        U_cpu[1, :, :, :] .= F(1)
         
         return nu_cpu, U_cpu
     end
@@ -134,16 +134,16 @@ function load_C_config(vac_fname::String, Npoint::Int, N_colors::Int)
                 read!(f, z_site)
                 
                 for c in 1:N_colors
-                    nu_cpu[1, t, x, c] = real(z_site[c])
-                    nu_cpu[2, t, x, c] = imag(z_site[c])
+                    nu_cpu[1, t, x, c] = F(real(z_site[c]))
+                    nu_cpu[2, t, x, c] = F(imag(z_site[c]))
                 end
                 
                 u_site = zeros(ComplexF64, 2)
                 read!(f, u_site)
                 
                 for mu in 1:2
-                    U_cpu[1, t, x, mu] = real(u_site[mu])
-                    U_cpu[2, t, x, mu] = imag(u_site[mu])
+                    U_cpu[1, t, x, mu] = F(real(u_site[mu]))
+                    U_cpu[2, t, x, mu] = F(imag(u_site[mu]))
                 end
             end
         end

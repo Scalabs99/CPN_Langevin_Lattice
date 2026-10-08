@@ -431,7 +431,7 @@ function launch_main_Lang(config_fname::String)
     n_ords = conf.max_ptord + one(conf.max_ptord)
     N_colors = conf.n_comps + one(conf.n_comps)
     
-    nu_cpu, U_vac_cpu = load_C_config(conf.vac_fname, conf.Npoint, N_colors)
+    nu_cpu, U_vac_cpu = load_C_config(floatType, conf.vac_fname, conf.Npoint, N_colors)
     nu_vacuum = CuArray(floatType.(nu_cpu))
     U_vacuum = CuArray(floatType.(U_vac_cpu))
     

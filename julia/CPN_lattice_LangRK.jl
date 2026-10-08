@@ -368,17 +368,10 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
                 end 
             end
         end
-
-        if t == args.iter_start
-            println("--- DIAGNOSTICA STEP $t ---")
-            for p::I = 1:n_copies 
-                for ord::I = 1:n_ords
-                    nz = CUDA.norm(@view z[:, ord, :, :, :, p])
-                    nx = CUDA.norm(@view X[ord, :, :, :, p])
-                    ne = CUDA.norm(@view ener[ord, :, :, p])
-                    println("Ordine $ord -> Norma z: $nz | Norma X: $nx | Norma ener: $ne")
-                end
-            end 
+        
+        CUDA.@allowscalar begin
+            println("Campione rumore X: ", noise_X[2, 1, 1, 1, 1])
+            println("Campione campo z: ", z[1, 2, 1, 1, 1, 1])
         end
         
         compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener_ker)

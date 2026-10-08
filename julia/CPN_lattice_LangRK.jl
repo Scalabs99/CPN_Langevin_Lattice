@@ -198,8 +198,8 @@ function compute_energy!(
     end 
 
     CUDA.@sync begin
-        for i in eachindex(compute_ener)
-            @inbounds run_kernel(compute_ener[i])
+        for i in eachindex(compute_ener_ker)
+            @inbounds run_kernel(compute_ener_ker[i])
         end
     end 
     

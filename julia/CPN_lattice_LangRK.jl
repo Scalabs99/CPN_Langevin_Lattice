@@ -348,7 +348,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
             noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:], dims=(2, 3)) ./ Npoint2
             CUDA.@sync @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
-            CUDA.@sync @inbounds @views noise_X[2:2,:,:,:] .-= noise_mean_X
+            CUDA.@sync @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(grad_ker_z, grad_ker_U, zscaled2_ker, roots_ker)

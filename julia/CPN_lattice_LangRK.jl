@@ -378,7 +378,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             println("Campione rumore z: ", noise_z[1, 2, 1, 1, 1, 1])
             println("Campione campo z: ", z[1, 2, 1, 1, 1, 1])
             println("Campione campo U: ", U[1, 2, 1, 1, 1, 1])
-            println("Campione gradiente di U: ", gradient_U[1, 2, 1, 1, 1, 1])
+            println("Campione gradiente di U: ", gradient_U[2, 1, 1, 1, 1])
             println("Campione gradiente di z: ", gradient_z[1, 2, 1, 1, 1, 1])
         end
         

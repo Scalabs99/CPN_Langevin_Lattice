@@ -504,8 +504,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds U_re =  U[I(1), j-l+I(1), i, k, mu] 
                 @inbounds U_im =  U[I(2), j-l+I(1), i, k, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im)
-                @inbounds c_sc_buffB[I(2), j, i, k] -= F(0.5) * (A_re * U_im + A_im * U_re)
+                @inbounds c_sc_buffB[I(1), j, i, k] -= (A_re * U_re - A_im * U_im)
+                @inbounds c_sc_buffB[I(2), j, i, k] -= (A_re * U_im + A_im * U_re)
             end
         end
 
@@ -552,8 +552,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu]
                 @inbounds U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
-                @inbounds c_sc_buffB[I(2), j, i, k] -= F(0.5) * (A_im * U_re + A_re * U_im) # --> occhio qua --> adesso è giusto ma prima dava -Im
+                @inbounds c_sc_buffB[I(1), j, i, k] -= (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
+                @inbounds c_sc_buffB[I(2), j, i, k] -= (A_im * U_re + A_re * U_im) # --> occhio qua --> adesso è giusto ma prima dava -Im
             end
         end
 
@@ -630,7 +630,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
                     # Direzione 1 (es. Temporale: up/down)
-                    i_fwd, k_fwd = i_up, k # Mi muovo avanti nella direzione temporale
+                    i_fwd, k_fwd = i_dn, k # Mi muovo avanti nella direzione temporale
                 else
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx # Mi muovo avanti in quella spaziale 
@@ -685,8 +685,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
                     # Direzione 1 (es. Temporale: up/down)
-                    i_fwd, k_fwd = i_up, k
-                    i_bwd, k_bwd = i_dw, k
+                    i_fwd, k_fwd = i_dw, k
+                    i_bwd, k_bwd = i_up, k
                 else
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx
@@ -729,7 +729,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
                     # Direzione 1 (es. Temporale: up/down)
-                    i_fwd, k_fwd = i_up, k
+                    i_fwd, k_fwd = i_dn, k
                 else
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx

@@ -373,6 +373,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             println("Campione rumore X: ", noise_X[2, 1, 1, 1, 1])
             println("Campione campo z: ", z[1, 2, 1, 1, 1, 1])
             println("Campione campo U: ", U[1, 2, 1, 1, 1, 1])
+            println("Campione campo U all'ordine zero: ", U[1, 1, 1, 1, 1, 1])
         end
         
         compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener_ker)

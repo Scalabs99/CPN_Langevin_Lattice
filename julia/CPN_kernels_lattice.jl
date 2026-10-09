@@ -619,7 +619,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
         i, k = get_indexes()
         if (i <= Npoint && k <= Npoint)
-            i_up, k_up = neighbour_up(i, k)  
+            i_dw, k_dw = neighbour_down(i, k)  
             i_dx, k_dx = neighbour_right(i, k) 
 
             for j::I = 1:n_ptords
@@ -630,7 +630,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
                     # Direzione 1 (es. Temporale: up/down)
-                    i_fwd, k_fwd = i_dn, k # Mi muovo avanti nella direzione temporale
+                    i_fwd, k_fwd = i_dw, k # Mi muovo avanti nella direzione temporale
                 else
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx # Mi muovo avanti in quella spaziale 
@@ -722,14 +722,14 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
         if (i <= Npoint && k <= Npoint) 
             
-            i_up, k_up = neighbour_up(i, k)  
+            i_dw, k_dw = neighbour_down(i, k)  
             i_dx, k_dx = neighbour_right(i, k) 
 
             for mu::I = 1:2
             # Assegnazione statica dei vicini forward (+mu) e backward (-mu)
                 if mu == I(1)
                     # Direzione 1 (es. Temporale: up/down)
-                    i_fwd, k_fwd = i_dn, k
+                    i_fwd, k_fwd = i_dw, k
                 else
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx

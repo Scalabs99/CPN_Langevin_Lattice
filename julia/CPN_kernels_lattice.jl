@@ -330,7 +330,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
     function roots_kernel!(
         zscaled2::CuDeviceArray{F, 3, 1}, 
         root_zscaled2::CuDeviceArray{F, 3, 1}, 
-        invroot_zscaled2::CuDeviceArray{F, 3, 1}
+        invroot_zscaled2::CuDeviceArray{F, 3, 1}, 
+        sc_buffA::CuDeviceArray{F, 3, 1},
+        sc_buffB::CuDeviceArray{F, 3, 1}
     )
         i, k = get_indexes()
         
@@ -437,7 +439,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root::CuDeviceArray{F, 3, 1}, inv_root::CuDeviceArray{F, 3, 1}, 
         z::CuDeviceArray{F, 5 ,1}, U::CuDeviceArray{F, 5, 1}, result::CuDeviceArray{F, 5, 1}, 
         i::I, k::I, i_fwd::I, k_fwd::I,    
-        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I
+        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I, 
+        c_sc_buffA::CuDeviceArray{F, 4, 1}, c_sc_buffB::CuDeviceArray{F, 4, 1}, sc_buffA::CuDeviceArray{F, 3, 1}
     )
         
         # Rapporto z^N(x+mu) / z^N(x) 
@@ -486,7 +489,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root::CuDeviceArray{F, 3, 1}, inv_root::CuDeviceArray{F, 3, 1}, 
         z::CuDeviceArray{F, 5 ,1}, U::CuDeviceArray{F, 5, 1}, result::CuDeviceArray{F, 5, 1}, 
         i::I, k::I, i_bwd::I, k_bwd::I,    
-        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I
+        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 6, 1}, mu::I, 
+        c_sc_buffA::CuDeviceArray{F, 4, 1}, c_sc_buffB::CuDeviceArray{F, 4, 1}, sc_buffA::CuDeviceArray{F, 3, 1}
     )
         
         # Rapporto z^N(x-mu) / z^N(x) 
@@ -555,7 +559,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
     @inline function cmplx_G1_func!(z::CuDeviceArray{F, 5, 1}, root::CuDeviceArray{F, 3, 1}, 
         M::CuDeviceArray{F, 6, 1}, nu_vac::CuDeviceArray{F, 4, 1}, G1::CuDeviceArray{F, 4, 1}, 
-        i::I, k::I, i_fwd::I, k_fwd::I, mu::I
+        i::I, k::I, i_fwd::I, k_fwd::I, mu::I, sc_buffA::CuDeviceArray{F, 3, 1}
     )   
         
         mult_z_by_Mconj!(z, M, vec_buffer_comp, i, k, i, k, i, k, mu)
@@ -583,7 +587,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root_zscaled2::CuDeviceArray{F, 3, 1}, 
         M1::CuDeviceArray{F, 6, 1}, 
         nu_vacuum::CuDeviceArray{F, 4, 1}, 
-        c_sc_buffA::CuDeviceArray{F, 4, 1}
+        c_sc_buffA::CuDeviceArray{F, 4, 1},
+        sc_buffA::CuDeviceArray{F, 3, 1}
     )
 
         i, k = get_indexes()
@@ -604,7 +609,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx # Mi muovo avanti in quella spaziale 
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu, sc_buffA)
                 
                 @inbounds Uconj_mu_Re = U_mu[I(1), I(1), i, k, mu]
                 @inbounds Uconj_mu_Im = -U_mu[I(2), I(1), i, k, mu]
@@ -636,7 +641,10 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root_zscaled2::CuDeviceArray{F, 3, 1},
         invroot_zscaled2::CuDeviceArray{F, 3, 1},
         M1::CuDeviceArray{F, 6, 1}, 
-        vec_buffer_comp::CuDeviceArray{F, 5, 1}
+        vec_buffer_comp::CuDeviceArray{F, 5, 1}, 
+        c_sc_buffA::CuDeviceArray{F, 4, 1}, 
+        c_sc_buffB::CuDeviceArray{F, 4, 1}, 
+        sc_buffA::CuDeviceArray{F, 3, 1}
     )
         
         # Computes -grad_z ( visto che è quello che mi serve per Langevin)
@@ -676,8 +684,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 mult_z_by_M!(z, M1, vec_buffer_comp, i_fwd, k_fwd, i, k, i, k, mu)
                 mult_compvec_by_U!(vec_buffer_comp, U_mu, gradient_z, i, k, i, k, i, k, mu)
 
-                fwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_fwd, k_fwd, nu_vacuum, M1, mu)
-                bwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_bwd, k_bwd, nu_vacuum, M1, mu)
+                fwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_fwd, k_fwd, nu_vacuum, M1, mu, c_sc_buffA, c_sc_buffB, sc_buffA)
+                bwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_bwd, k_bwd, nu_vacuum, M1, mu, c_sc_buffA, c_sc_buffB, sc_buffA)
 
 
             end 
@@ -693,7 +701,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         M1::CuDeviceArray{F, 6, 1}, 
         root_zscaled2::CuDeviceArray{F, 3, 1},
         nu_vacuum::CuDeviceArray{F, 4, 1}, 
-        c_sc_buffB::CuDeviceArray{F, 4, 1}
+        c_sc_buffB::CuDeviceArray{F, 4, 1}, 
+        sc_buffA::CuDeviceArray{F, 3, 1}
     )
         # Calcola -gradient_U
         i, k = get_indexes()
@@ -712,7 +721,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffB, i, k, i_fwd, k_fwd, mu)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffB, i, k, i_fwd, k_fwd, mu, sc_buffA)
                 
                 for j::I=1:n_ptords 
                     @inbounds grad_U_mu[j, i, k, mu] = zero(F)

@@ -559,7 +559,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
     @inline function cmplx_G1_func!(z::CuDeviceArray{F, 5, 1}, root::CuDeviceArray{F, 3, 1}, 
         M::CuDeviceArray{F, 6, 1}, nu_vac::CuDeviceArray{F, 4, 1}, G1::CuDeviceArray{F, 4, 1}, 
-        i::I, k::I, i_fwd::I, k_fwd::I, mu::I, sc_buffA::CuDeviceArray{F, 3, 1}
+        i::I, k::I, i_fwd::I, k_fwd::I, mu::I, sc_buffA::CuDeviceArray{F, 3, 1}, vec_buffer_comp::CuDeviceArray{F, 5, 1}
     )   
         
         mult_z_by_Mconj!(z, M, vec_buffer_comp, i, k, i, k, i, k, mu)
@@ -588,7 +588,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         M1::CuDeviceArray{F, 6, 1}, 
         nu_vacuum::CuDeviceArray{F, 4, 1}, 
         c_sc_buffA::CuDeviceArray{F, 4, 1},
-        sc_buffA::CuDeviceArray{F, 3, 1}
+        sc_buffA::CuDeviceArray{F, 3, 1}, 
+        vec_buffer_comp::CuDeviceArray{F, 5, 1}
     )
 
         i, k = get_indexes()
@@ -609,7 +610,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx # Mi muovo avanti in quella spaziale 
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu, sc_buffA)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu, sc_buffA, vec_buffer_comp)
                 
                 @inbounds Uconj_mu_Re = U_mu[I(1), I(1), i, k, mu]
                 @inbounds Uconj_mu_Im = -U_mu[I(2), I(1), i, k, mu]
@@ -702,7 +703,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         root_zscaled2::CuDeviceArray{F, 3, 1},
         nu_vacuum::CuDeviceArray{F, 4, 1}, 
         c_sc_buffB::CuDeviceArray{F, 4, 1}, 
-        sc_buffA::CuDeviceArray{F, 3, 1}
+        sc_buffA::CuDeviceArray{F, 3, 1}, 
+        vec_buffer_comp::CuDeviceArray{F, 5, 1}
     )
         # Calcola -gradient_U
         i, k = get_indexes()
@@ -721,7 +723,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffB, i, k, i_fwd, k_fwd, mu, sc_buffA)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffB, i, k, i_fwd, k_fwd, mu, sc_buffA, vec_buffer_comp)
                 
                 for j::I=1:n_ptords 
                     @inbounds grad_U_mu[j, i, k, mu] = zero(F)

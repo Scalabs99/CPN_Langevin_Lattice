@@ -475,7 +475,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds U_re =  U[I(1), j-l+I(1), i, k, mu] 
                 @inbounds U_im =  U[I(2), j-l+I(1), i, k, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= (A_re * U_re - A_im * U_im)
+                @inbounds c_sc_buffB[I(1), j, i, k] -= F(2) * (A_re * U_re - A_im * U_im)
                 #@inbounds c_sc_buffB[I(2), j, i, k] -= (A_re * U_im + A_im * U_re)
             end
         end
@@ -524,7 +524,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu]
                 @inbounds U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
+                @inbounds c_sc_buffB[I(1), j, i, k] -= F(2) * (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
                 # @inbounds c_sc_buffB[I(2), j, i, k] -= (A_im * U_re + A_re * U_im) # --> occhio qua --> adesso è giusto ma prima dava -Im
             end
         end

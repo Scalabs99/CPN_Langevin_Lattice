@@ -451,9 +451,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         idx_N = n_comps + I(1)
         @inbounds ratio_vac = nu_vac[I(1), i_fwd, k_fwd, idx_N] / nu_vac[I(1), i, k, idx_N]
         
-        # Nel termine forward compare la matrice M1 non coniugata 
         @inbounds M_re =  M[I(1), I(1), i, k, mu, idx_N] # La matrice è zero a tutti gli ordine superiori a quello banale 
-        @inbounds M_im =  M[I(2), I(1), i, k, mu, idx_N] # questi sono gli ultimi elementi della matrice di twist 
+        @inbounds M_im =  -M[I(2), I(1), i, k, mu, idx_N] # questi sono gli ultimi elementi della matrice di twist 
 
         for j::I = 1:n_ptords
             @inbounds val = sc_buffA[j, i, k] * ratio_vac
@@ -471,11 +470,11 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds A_re = c_sc_buffA[I(1), l, i, k]
                 @inbounds A_im = c_sc_buffA[I(2), l, i, k]
                 
-                # Link di gauge valutato in x (non coniugato)
+                # Link di gauge valutato in x 
                 @inbounds U_re =  U[I(1), j-l+I(1), i, k, mu] 
-                @inbounds U_im =  U[I(2), j-l+I(1), i, k, mu] 
+                @inbounds U_im =  -U[I(2), j-l+I(1), i, k, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= F(2) * (A_re * U_re - A_im * U_im)
+                @inbounds c_sc_buffB[I(1), j, i, k] -= (A_re * U_re - A_im * U_im)
                 #@inbounds c_sc_buffB[I(2), j, i, k] -= (A_re * U_im + A_im * U_re)
             end
         end

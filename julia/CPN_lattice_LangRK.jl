@@ -253,11 +253,11 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     Npoint2 = Npoint^2
 
     # Buffers used in computations (for the kernels)
-    vec_buffer_comp = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_comps, n_copies)
-    sc_buffA        = CuArray{F}(undef, n_ptords, Npoint, Npoint, n_copies)
-    sc_buffB        = CuArray{F}(undef, n_ptords, Npoint, Npoint, n_copies)
-    c_sc_buffA      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_copies)
-    c_sc_buffB      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_copies)
+    vec_buffer_comp = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
+    sc_buffA        = CuArray{F}(undef, n_ords, Npoint, Npoint, n_copies)
+    sc_buffB        = CuArray{F}(undef, n_ords, Npoint, Npoint, n_copies)
+    c_sc_buffA      = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_copies)
+    c_sc_buffB      = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_copies)
 
     # Initialize additional variables 
     z_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)

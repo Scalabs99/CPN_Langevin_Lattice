@@ -105,8 +105,15 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
         # Vuoto banale per Z: parte reale [indice 1] dell'ultimo "colore" [N_colors] uguale a 1
         nu_cpu[1, :, :, N_colors] .= F(1)
         
-        # Vuoto banale per U: parte reale [indice 1] di tutti i link uguale a 1
+        # Vuoto banale per U: parte reale [indice 1] di tutti i link uguale a 1 nella direzione spaziale 
         U_cpu[1, :, :, :] .= F(1)
+        phase = F(2.0 * pi * (N_colors - 1) / N_colors)
+        re_phase = cos(phase)
+        im_phase = sin(phase)
+
+        U_cpu[1, Npoint, :, 1] .= re_phase
+        U_cpu[2, Npoint, :, 1] .= -im_phase 
+
         
         return nu_cpu, U_cpu
     end

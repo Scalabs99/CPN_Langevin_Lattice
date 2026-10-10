@@ -72,7 +72,7 @@ function Euler_step_z!(
     
 
     @views z_Eu .= z
-    CUDA.@sync z_Eu .+= (N_colors * dt .* gradz) .+ (sqrt(F(2) * dt) .* noise_z) 
+    CUDA.@sync z_Eu .+= (N_colors * dt .* gradz) .+ (sqrt(dt) .* noise_z) # Var(noise) = Var(Re(noise)) + Var(Im(noise)) --> non serve il fattore radice di 2!!!
     @views z_Eu[:, 1, :, :, :, :] .= z[:, 1, :, :, :, :] #Cancella il rumore di macchina 
 
     return nothing 
@@ -252,6 +252,13 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     N_colors = n_comps + one(n_comps)
     Npoint2 = Npoint^2
 
+    # Buffers used in computations (for the kernels)
+    vec_buffer_comp = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_comps, n_copies)
+    sc_buffA        = CuArray{F}(undef, n_ptords, Npoint, Npoint, n_copies)
+    sc_buffB        = CuArray{F}(undef, n_ptords, Npoint, Npoint, n_copies)
+    c_sc_buffA      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_copies)
+    c_sc_buffB      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_copies)
+
     # Initialize additional variables 
     z_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     U_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_copies)
@@ -315,19 +322,19 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
         @inbounds @views M1_ker[i] = compile_kernel(f_twist, (M1[:,:,:,:,:,:,i],), Npoint2)
         @inbounds @views zscaled2_ker[i] = compile_kernel(f_z2, (z[:,:,:,:,:,i], nu_vacuum, zscaled2[:,:,:,i]), Npoint2)
         @inbounds @views roots_ker[i] = compile_kernel(f_roots, (zscaled2[:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i]), Npoint2)
-        @inbounds @views gradker_z[i] = compile_kernel(f_grad_z, (z[:,:,:,:,:,i], nu_vacuum, U[:,:,:,:,:,i], gradient_z[:,:,:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], M1[:,:,:,:,:,:,i]), Npoint2)
-        @inbounds @views gradker_U[i] = compile_kernel(f_grad_U, (gradient_U[:,:,:,:,i], U[:,:,:,:,:,i], z[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum), Npoint2)
-        @inbounds @views ExpU_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U[:,:,:,:,:,i]), Npoint2)
+        @inbounds @views gradker_z[i] = compile_kernel(f_grad_z, (z[:,:,:,:,:,i], nu_vacuum, U[:,:,:,:,:,i], gradient_z[:,:,:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], M1[:,:,:,:,:,:,i], vec_buffer_comp[:,:,:,:,:,i]), Npoint2)
+        @inbounds @views gradker_U[i] = compile_kernel(f_grad_U, (gradient_U[:,:,:,:,i], U[:,:,:,:,:,i], z[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum, c_sc_buffB[:,:,:,:,i]), Npoint2)
+        @inbounds @views ExpU_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U[:,:,:,:,:,i], sc_buffA[:,:,:,i], sc_buffB[:,:,:,i]), Npoint2)
         
         @inbounds @views zscaled2_ker_Eu[i] = compile_kernel(f_z2, (z_Eu[:,:,:,:,:,i], nu_vacuum, zscaled2[:,:,:,i]), Npoint2)
         @inbounds @views roots_ker_Eu[i] = compile_kernel(f_roots, (zscaled2[:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i]), Npoint2)
-        @inbounds @views gradker_z_Eu[i] = compile_kernel(f_grad_z, (z_Eu[:,:,:,:,:,i], nu_vacuum, U_Eu[:,:,:,:,:,i], gradz_Eu[:,:,:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], M1[:,:,:,:,:,:,i]), Npoint2)
-        @inbounds @views gradker_U_Eu[i] = compile_kernel(f_grad_U, (gradU_Eu[:,:,:,:,i], U_Eu[:,:,:,:,:,i], z_Eu[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum), Npoint2)
+        @inbounds @views gradker_z_Eu[i] = compile_kernel(f_grad_z, (z_Eu[:,:,:,:,:,i], nu_vacuum, U_Eu[:,:,:,:,:,i], gradz_Eu[:,:,:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], M1[:,:,:,:,:,:,i], vec_buffer_comp[:,:,:,:,:,i]), Npoint2)
+        @inbounds @views gradker_U_Eu[i] = compile_kernel(f_grad_U, (gradU_Eu[:,:,:,:,i], U_Eu[:,:,:,:,:,i], z_Eu[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum, c_sc_buffB[:,:,:,:,i]), Npoint2)
         @inbounds @views ExpU_Eu_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U_Eu[:,:,:,:,:,i]), Npoint2)
   
         @inbounds @views zero_mode_z_ker[i] = compile_kernel(f_zeromode_z, (z[:,:,:,:,:,i], zero_modo_z[:,:,:,i]), Npoint2)
         @inbounds @views zero_mode_X_ker[i] = compile_kernel(f_zeromode_X, (X[:,:,:,:,i], zero_modo_X[:,:,i]), Npoint2)
-        @inbounds @views compute_ener_ker[i] = compile_kernel(f_ener, (z[:,:,:,:,:,i], U[:,:,:,:,:,i], ener[:,:,:,i], root_z2[:,:,:,i], M1[:,:,:,:,:,:,i], nu_vacuum), Npoint2)
+        @inbounds @views compute_ener_ker[i] = compile_kernel(f_ener, (z[:,:,:,:,:,i], U[:,:,:,:,:,i], ener[:,:,:,i], root_z2[:,:,:,i], M1[:,:,:,:,:,:,i], nu_vacuum, c_sc_buffA[:,:,:,:,i]), Npoint2)
     end
 
     initialize_M1!(M1_ker)

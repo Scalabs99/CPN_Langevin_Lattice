@@ -20,28 +20,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
     unity = CUDA.zeros(F, n_ptords)
     @inbounds CUDA.@allowscalar unity[1] = one(F)
     
-    # Buffers used in computations
-    vec_buffer_comp = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint, n_comps)
-    sc_buffA        = CuArray{F}(undef, n_ptords, Npoint, Npoint)
-    sc_buffB        = CuArray{F}(undef, n_ptords, Npoint, Npoint)
-    c_sc_buffA      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint)
-    c_sc_buffB      = CuArray{F}(undef, I(2), n_ptords, Npoint, Npoint)
-
-    @inline function set_unity!(v::CuDeviceArray{F, 3, 1}, i::I, k::I) 
-        for j::I = 2:n_ptords
-            @inbounds v[j, i, k] = 0
-        end
-        @inbounds v[1, i, k] = 1
-        return 
-    end 
-
-    @inline function set_unity_vec!(v::CuDeviceArray{F, 4, 1}, i::I, k::I, n::I) 
-        for j::I = 2:n_ptords  
-            @inbounds v[j, i, k, n] = 0
-        end 
-        @inbounds v[1, i, k, n] = 1
-        return 
-    end
 
     # Functions returning the coordinates of the nearest neighbour of site (i, k) in the given direction
     # Are there periodic boundary conditions?? 
@@ -155,18 +133,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         return 
     end 
 
-    @inline function unmenx!(
-        x::CuDeviceArray{F, 3, 1},
-        i::I, k::I,
-        result::CuDeviceArray{F, 3, 1}
-    )
-        # mette in result la sottrazione unity - x
-        for j::I = 1:n_ptords
-            @inbounds result[j, i, k] = unity[j] - x[j, i, k]
-        end 
-        return
-    end
-
     @inline function complex_exponential_taylor!(
         X::CuDeviceArray{F, 4, 1},  #Array reale 
         E::CuDeviceArray{F, 5, 1}, #Risultato: esponenziale complesso 
@@ -223,7 +189,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         X::CuDeviceArray{F, 4, 1},
         Exp::CuDeviceArray{F, 5, 1}, 
         U::CuDeviceArray{F, 5, 1}, 
-        ExpU::CuDeviceArray{F, 5, 1}
+        ExpU::CuDeviceArray{F, 5, 1},
+        sc_buffA::CuDeviceArray{F, 3, 1}, 
+        sc_buffB::CuDeviceArray{F, 3, 1}
     )
 
         i, k = get_indexes()
@@ -614,7 +582,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         ener::CuDeviceArray{F, 3, 1}, 
         root_zscaled2::CuDeviceArray{F, 3, 1}, 
         M1::CuDeviceArray{F, 6, 1}, 
-        nu_vacuum::CuDeviceArray{F, 4, 1}
+        nu_vacuum::CuDeviceArray{F, 4, 1}, 
+        c_sc_buffA::CuDeviceArray{F, 4, 1}
     )
 
         i, k = get_indexes()
@@ -637,14 +606,21 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 end 
                 cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
                 
-                for j::I=1:n_ptords 
+                @inbounds Uconj_mu_Re = U_mu[I(1), I(1), i, k, mu]
+                @inbounds Uconj_mu_Im = -U_mu[I(2), I(1), i, k, mu]
+                @inbounds G1_Re = c_sc_buffA[I(1), I(1), i, k]
+                @inbounds G1_Im = c_sc_buffA[I(2), I(1), i, k]
+                
+                @inbounds ener[I(1), i, k] -= F(2) * (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im) - F(2)
+
+                for j::I=2:n_ptords 
                     for l::I = 1:j
                         @inbounds Uconj_mu_Re = U_mu[I(1), l, i, k, mu]
                         @inbounds Uconj_mu_Im = -U_mu[I(2), l, i, k, mu]
                         @inbounds G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
                         @inbounds G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        @inbounds ener[j, i, k] -= F(2) * (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im) - F(2) * unity[j]
+                        @inbounds ener[j, i, k] -= F(2) * (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im)
                     end 
                 end 
             end 
@@ -659,7 +635,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         gradient_z::CuDeviceArray{F, 5, 1}, 
         root_zscaled2::CuDeviceArray{F, 3, 1},
         invroot_zscaled2::CuDeviceArray{F, 3, 1},
-        M1::CuDeviceArray{F, 6, 1}
+        M1::CuDeviceArray{F, 6, 1}, 
+        vec_buffer_comp::CuDeviceArray{F, 5, 1}
     )
         
         # Computes -grad_z ( visto che è quello che mi serve per Langevin)
@@ -715,7 +692,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         z::CuDeviceArray{F, 5, 1}, 
         M1::CuDeviceArray{F, 6, 1}, 
         root_zscaled2::CuDeviceArray{F, 3, 1},
-        nu_vacuum::CuDeviceArray{F, 4, 1}
+        nu_vacuum::CuDeviceArray{F, 4, 1}, 
+        c_sc_buffB::CuDeviceArray{F, 4, 1}
     )
         # Calcola -gradient_U
         i, k = get_indexes()
@@ -734,15 +712,15 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu)
+                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffB, i, k, i_fwd, k_fwd, mu)
                 
                 for j::I=1:n_ptords 
                     @inbounds grad_U_mu[j, i, k, mu] = zero(F)
                     for l::I = 1:j
                         @inbounds Uconj_mu_Re = U_mu[I(1), l, i, k, mu]
                         @inbounds Uconj_mu_Im = -U_mu[I(2), l, i, k, mu]
-                        @inbounds G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
-                        @inbounds G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
+                        @inbounds G1_Re = c_sc_buffB[I(1), j-l+I(1), i, k]
+                        @inbounds G1_Im = c_sc_buffB[I(2), j-l+I(1), i, k]
 
                         @inbounds grad_U_mu[j, i, k, mu] += Uconj_mu_Re * G1_Im + Uconj_mu_Im * G1_Re # la forza è solo la parte immaginaria 
                     end 

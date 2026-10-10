@@ -130,7 +130,7 @@ function RK_evolution_z!(
     # esegue l'evoluzione di uno step secondo l'algoritmo RK del secondo ordine
     # per l'equazione di Langevin 
     
-    CUDA.@sync @views z[:,2:end,:,:,:,:] .+= (F(N_colors) * F(0.5) * dt) .* (grad_z[:,2:end,:,:,:,:] .+ gradz_Eu[:,2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_z[:,2:end,:,:,:,:])
+    CUDA.@sync @views z[:,2:end,:,:,:,:] .+= (F(N_colors) * F(0.5) * dt) .* (grad_z[:,2:end,:,:,:,:] .+ gradz_Eu[:,2:end,:,:,:,:]) .+ (sqrt(dt) .* noise_z[:,2:end,:,:,:,:])
     
     return nothing
 end
@@ -372,12 +372,12 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             RK_evolution_U!(U, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zero_mode_X_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
             # Sottrai lo zero mode da z alla fine di ogni singolo step per evitare il drift
-            CUDA.@sync @inbounds @views zero_modo_z[:,2:end,:,:] .= CUDA.sum(z[:,2:end,:,:,:,:], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
-            CUDA.@sync begin 
-                for i in eachindex(zero_mode_z_ker)
-                    @inbounds run_kernel(zero_mode_z_ker[i])
-                end 
-            end
+            #CUDA.@sync @inbounds @views zero_modo_z[:,2:end,:,:] .= CUDA.sum(z[:,2:end,:,:,:,:], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
+            #CUDA.@sync begin 
+                #for i in eachindex(zero_mode_z_ker)
+                    #@inbounds run_kernel(zero_mode_z_ker[i])
+                #end 
+            #end
         end
         
         CUDA.@allowscalar begin

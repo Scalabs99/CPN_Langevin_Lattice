@@ -686,12 +686,12 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
 
             end 
 
-            for n::I=1:n_comps 
-                for j::I=1:n_ptords 
-                    @inbounds gradient_z[I(1), j, i, k, n] = F(2) * gradient_z[I(1), j, i, k, n]
-                    @inbounds gradient_z[I(2), j, i, k, n] = F(2) * gradient_z[I(2), j, i, k, n]
-                end 
-            end 
+            #for n::I=1:n_comps 
+                #for j::I=1:n_ptords 
+                    #@inbounds gradient_z[I(1), j, i, k, n] = F(2) * gradient_z[I(1), j, i, k, n]
+                    #@inbounds gradient_z[I(2), j, i, k, n] = F(2) * gradient_z[I(2), j, i, k, n]
+                #end 
+            #end 
 
             for mu::I = 1:2
             

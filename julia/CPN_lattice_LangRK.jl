@@ -104,11 +104,11 @@ function Euler_step_U!(
     CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
-    CUDA.@sync begin 
-        for i in eachindex(zero_modeX_ker)
-            @inbounds run_kernel(zero_modeX_ker[i])
-        end 
-    end
+    #CUDA.@sync begin 
+        #for i in eachindex(zero_modeX_ker)
+            #@inbounds run_kernel(zero_modeX_ker[i])
+        #end 
+    #end
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -160,11 +160,11 @@ function RK_evolution_U!(
     CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
-    CUDA.@sync begin 
-        for i in eachindex(zero_modeX_ker)
-            @inbounds run_kernel(zero_modeX_ker[i])
-        end 
-    end
+    #CUDA.@sync begin 
+        #for i in eachindex(zero_modeX_ker)
+            #@inbounds run_kernel(zero_modeX_ker[i])
+        #end 
+    #end
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
     compute_exponential!(ExpU_ker)

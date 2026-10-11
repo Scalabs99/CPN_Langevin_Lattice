@@ -125,8 +125,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                     @inbounds uconj_re = U[I(1), j-l+I(1), i_b, k_b, mu]
                     @inbounds uconj_im = -U[I(2), j-l+I(1), i_b, k_b, mu]
 
-                    @inbounds result[I(1), j, i_out, k_out, n] += (z_re * u_conj_re - z_im * uconj_im)
-                    @inbounds result[I(2), j, i_out, k_out, n] += (z_im * u_conj_re + z_re * uconj_im)
+                    @inbounds result[I(1), j, i_out, k_out, n] += (z_re * uconj_re - z_im * uconj_im)
+                    @inbounds result[I(2), j, i_out, k_out, n] += (z_im * uconj_re + z_re * uconj_im)
                 end 
             end 
         end 

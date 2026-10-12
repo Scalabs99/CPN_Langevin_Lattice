@@ -103,12 +103,12 @@ function Euler_step_U!(
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
     CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
-    # Lancia il kernel per togliere lo zero mode da X 
-    #CUDA.@sync begin 
-        #for i in eachindex(zero_modeX_ker)
-            #@inbounds run_kernel(zero_modeX_ker[i])
-        #end 
-    #end
+    # Lancia il kernel per togliere lo zero mode da X --> per le PBC serve
+    CUDA.@sync begin 
+        for i in eachindex(zero_modeX_ker)
+            @inbounds run_kernel(zero_modeX_ker[i])
+        end 
+    end
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -159,12 +159,12 @@ function RK_evolution_U!(
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
     CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
-    # Lancia il kernel per togliere lo zero mode da X 
-    #CUDA.@sync begin 
-        #for i in eachindex(zero_modeX_ker)
-            #@inbounds run_kernel(zero_modeX_ker[i])
-        #end 
-    #end
+    # Lancia il kernel per togliere lo zero mode da X --> per le PBC serve
+    CUDA.@sync begin 
+        for i in eachindex(zero_modeX_ker)
+            @inbounds run_kernel(zero_modeX_ker[i])
+        end 
+    end
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
     compute_exponential!(ExpU_ker)
@@ -376,12 +376,12 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             RK_evolution_U!(U, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zero_mode_X_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
             # Sottrai lo zero mode da z alla fine di ogni singolo step per evitare il drift
-            #CUDA.@sync @inbounds @views zero_modo_z[:,2:end,:,:] .= CUDA.sum(z[:,2:end,:,:,:,:], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
-            #CUDA.@sync begin 
-                #for i in eachindex(zero_mode_z_ker)
-                    #@inbounds run_kernel(zero_mode_z_ker[i])
-                #end 
-            #end
+            CUDA.@sync @inbounds @views zero_modo_z[:,2:end,:,:] .= CUDA.sum(z[:,2:end,:,:,:,:], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
+            CUDA.@sync begin # Per le PBC bisogna sottrarlo 
+                for i in eachindex(zero_mode_z_ker)
+                    @inbounds run_kernel(zero_mode_z_ker[i]) 
+                end 
+            end
         end
         
         CUDA.@allowscalar begin

@@ -349,7 +349,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
         return nothing
     end
 
-    function init_M1_kernel!(M1::CuDeviceArray{F, 6, 1}) 
+    function init_M1_kernel!(M1::CuDeviceArray{F, 6, 1}) #lavorando con le PBC questa è la matrice identità
         
         i, k = get_indexes() 
         
@@ -368,13 +368,13 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
             for mu::I = 1:2
                 for n::I = 1:N_colors
                     # Calcolo della fase: in Julia n va da 1 a N_colors, nel C era k da 0 a N-1
-                    phase = F(2.0 * pi * (n - 1) / N_colors)
-                    re_phase = cos(phase)
-                    im_phase = sin(phase)
+                    #phase = F(2.0 * pi * (n - 1) / N_colors)
+                    #re_phase = cos(phase)
+                    #im_phase = sin(phase) --> non serve per le PBC
                     
                     if i == Npoint && mu == 1 # Corrisponde a x0 == Lt - 1 e mu == 0 nel C
-                        @inbounds M1[I(1), I(1), i, k, mu, n] = re_phase
-                        @inbounds M1[I(2), I(1), i, k, mu, n] = im_phase
+                        @inbounds M1[I(1), I(1), i, k, mu, n] = one(F)
+                        @inbounds M1[I(2), I(1), i, k, mu, n] = zero(F)
                         
                     elseif i == Npoint - 1 && mu == 1 # Corrisponde a x0 == Lt - 2 e mu == 0 nel C
                         @inbounds M1[I(1), I(1), i, k, mu, n] = one(F)

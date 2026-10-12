@@ -474,7 +474,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds U_re =  U[I(1), j-l+I(1), i, k, mu] 
                 @inbounds U_im =  -U[I(2), j-l+I(1), i, k, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= F(2) * (A_re * U_re - A_im * U_im)
+                @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im)
                 #@inbounds c_sc_buffB[I(2), j, i, k] -= (A_re * U_im + A_im * U_re)
             end
         end
@@ -523,7 +523,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu]
                 @inbounds U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu] 
                 
-                @inbounds c_sc_buffB[I(1), j, i, k] -= F(2) * (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
+                @inbounds c_sc_buffB[I(1), j, i, k] -= F(0.5) * (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
                 # @inbounds c_sc_buffB[I(2), j, i, k] -= (A_im * U_re + A_re * U_im) # --> occhio qua --> adesso è giusto ma prima dava -Im
             end
         end
@@ -616,7 +616,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 @inbounds G1_Re = c_sc_buffA[I(1), I(1), i, k]
                 @inbounds G1_Im = c_sc_buffA[I(2), I(1), i, k]
                 
-                @inbounds ener[I(1), i, k] -= F(2) * (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im) - F(2)
+                @inbounds ener[I(1), i, k] -= (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im) - F(1)
 
                 for j::I=2:n_ptords 
                     for l::I = 1:j
@@ -625,7 +625,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                         @inbounds G1_Re = c_sc_buffA[I(1), j-l+I(1), i, k]
                         @inbounds G1_Im = c_sc_buffA[I(2), j-l+I(1), i, k]
 
-                        @inbounds ener[j, i, k] -= F(2) * (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im)
+                        @inbounds ener[j, i, k] -= (Uconj_mu_Re * G1_Re - Uconj_mu_Im * G1_Im)
                     end 
                 end 
             end 
@@ -684,13 +684,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I) where {F
                 mult_z_by_M!(z, M1, vec_buffer_comp, i_fwd, k_fwd, i, k, i, k, mu)
                 mult_compvec_by_U!(vec_buffer_comp, U_mu, gradient_z, i, k, i, k, i, k, mu)
 
-            end 
-
-            for n::I=1:n_comps 
-                for j::I=1:n_ptords 
-                    #@inbounds gradient_z[I(1), j, i, k, n] = F(2) * gradient_z[I(1), j, i, k, n]
-                    #@inbounds gradient_z[I(2), j, i, k, n] = F(2) * gradient_z[I(2), j, i, k, n]
-                end 
             end 
 
             for mu::I = 1:2

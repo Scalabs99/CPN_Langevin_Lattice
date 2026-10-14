@@ -375,8 +375,8 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             reset_noise_X!(noise_X, cuda_rng)
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
-            @inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
-            @inbounds @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
+            noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
+            noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
             CUDA.@sync @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
             CUDA.@sync @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
 
@@ -485,8 +485,8 @@ function launch_main_Lang(config_fname::String)
     # è una cosa che faccio solo una volta all'inizio del programma 
     CUDA.@sync begin # Quì non sto usando gli stream. Va bene il CUDA.@sync
         for c in 1:conf.n_copies
-            @views z_init[:, 1, :, :, 1:conf.n_comps, c] .= nu_vacuum[:, :, :, 1:conf.n_comps]
-            @views U_init[:, 1, :, :, :, c] .= U_vacuum
+            @inbounds @views z_init[:, 1, :, :, 1:conf.n_comps, c] .= nu_vacuum[:, :, :, 1:conf.n_comps]
+            @inbounds @views U_init[:, 1, :, :, :, c] .= U_vacuum
         end
     end
     

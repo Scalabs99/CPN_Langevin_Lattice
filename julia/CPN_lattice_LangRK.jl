@@ -203,7 +203,7 @@ function compute_energy!(
         end
     end 
     
-CUDA.@sync @inbounds @views energy.= CUDA.sum(ener, dims=(2, 3))[:,1,1,:] ./ (Npoint2) #Questa è la vera energia. Il kernel calcola ogni termine della somma
+    CUDA.@sync @inbounds @views energy.= CUDA.sum(ener, dims=(2, 3))[:,1,1,:] ./ (Npoint2) #Questa è la vera energia. Il kernel calcola ogni termine della somma
     return nothing
 end
 

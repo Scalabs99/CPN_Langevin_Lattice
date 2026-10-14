@@ -68,10 +68,10 @@ function Euler_step_z!(
 ) where {F <: AbstractFloat, I <:Integer}
     
 
-    z_Eu .= z
+    CUDA.@sync z_Eu .= z
     CUDA.@sync z_Eu .+= (N_colors * dt .* gradz) .+ (sqrt(dt) .* noise_z) # Var(noise) = Var(Re(noise)) + Var(Im(noise)) --> non serve il fattore radice di 2!!!
-    @inbounds @views z_Eu[:, 1, :, :, :, :] .= z[:, 1, :, :, :, :] #Cancella il rumore di macchina 
-    CUDA.synchronize()
+    CUDA.@sync @inbounds @views z_Eu[:, 1, :, :, :, :] .= z[:, 1, :, :, :, :] #Cancella il rumore di macchina 
+   
 
     return nothing 
 end 
@@ -90,7 +90,7 @@ function Euler_step_U!(
     Npoint2::I
 ) where {F <: AbstractFloat, I <: Integer}
 
-    U_Eu .= U
+    CUDA.@sync U_Eu .= U
 
     # Costruisci l'incremento X (Forza + Rumore)
     @inbounds @views X[1, :, :, :, :] .= zero(F) # BLINDA IL BACKGROUND: nessuna fase aggiuntiva!
@@ -116,7 +116,7 @@ function Euler_step_U!(
     end 
 
     # Cancella il rumore di macchina dal background del link aggiornato
-    @inbounds @views U_Eu[:, 1, :, :, :, :] .= U[:, 1, :, :, :, :] 
+    CUDA.@sync @inbounds @views U_Eu[:, 1, :, :, :, :] .= U[:, 1, :, :, :, :] 
     
     return nothing
 end
@@ -138,6 +138,7 @@ end
 
 function RK_evolution_U!(
     U::CuArray{F, 6}, 
+    U_temp::CuArray{F, 6}, 
     gradU_Eu::CuArray{F, 5}, 
     gradU::CuArray{F, 5}, 
     noise_X::CuArray{F, 5}, 
@@ -174,6 +175,8 @@ function RK_evolution_U!(
             @inbounds run_kernel(ExpU_ker[i])
         end 
     end 
+
+    CUDA.@sync @inbounds @views U[:,2:end,:,:,:,:] .= U_temp[:,2:end,:,:,:,:]
     
     return nothing 
 end 
@@ -269,6 +272,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     # Initialize additional variables 
     z_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     U_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_copies)
+    U_temp = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_copies)
     X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     gradient_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     gradz_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
@@ -335,7 +339,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
         @inbounds @views roots_ker[i] = compile_kernel(f_roots, (zscaled2[:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], sc_buffA[:,:,:,i], sc_buffB[:,:,:,i]), Npoint2, s)
         @inbounds @views gradker_z[i] = compile_kernel(f_grad_z, (z[:,:,:,:,:,i], nu_vacuum, U[:,:,:,:,:,i], gradient_z[:,:,:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], M1[:,:,:,:,:,:,i], vec_buffer_comp[:,:,:,:,:,i], c_sc_buffA[:,:,:,:,i], c_sc_buffB[:,:,:,:,i], sc_buffA[:,:,:,i]), Npoint2, s)
         @inbounds @views gradker_U[i] = compile_kernel(f_grad_U, (gradient_U[:,:,:,:,i], U[:,:,:,:,:,i], z[:,:,:,:,:,i], M1[:,:,:,:,:,:,i], root_z2[:,:,:,i], nu_vacuum, c_sc_buffB[:,:,:,:,i], sc_buffA[:,:,:,i], vec_buffer_comp[:,:,:,:,:,i]), Npoint2, s)
-        @inbounds @views ExpU_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U[:,:,:,:,:,i], sc_buffA[:,:,:,i], sc_buffB[:,:,:,i]), Npoint2, s)
+        @inbounds @views ExpU_ker[i] = compile_kernel(f_exp, (X[:,:,:,:,i], Exp_buffer[:,:,:,:,:,i], U[:,:,:,:,:,i], U_temp[:,:,:,:,:,i], sc_buffA[:,:,:,i], sc_buffB[:,:,:,i]), Npoint2, s)
         
         @inbounds @views zscaled2_ker_Eu[i] = compile_kernel(f_z2, (z_Eu[:,:,:,:,:,i], nu_vacuum, zscaled2[:,:,:,i]), Npoint2, s)
         @inbounds @views roots_ker_Eu[i] = compile_kernel(f_roots, (zscaled2[:,:,:,i], root_z2[:,:,:,i], invroot_z2[:,:,:,i], sc_buffA[:,:,:,i], sc_buffB[:,:,:,i]), Npoint2, s)

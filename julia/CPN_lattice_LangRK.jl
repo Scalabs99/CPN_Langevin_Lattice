@@ -296,12 +296,14 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     end
     
     # compilazione dei kernel e creazione di struct con i kernel compilati
+    f_z2, f_grad_z, f_grad_U, f_zeromode_z, f_zeromode_X, f_ener, f_twist, f_roots, f_exp = create_kernels(F, Npoint, max_ptord, n_comps)
+
+    # 2. Crea e SALVA gli stream in un array
+    streams = [CUDA.CuStream() for _ in 1:n_copies]
 
     for i in 1:n_copies
 
-        s = CUDA.CuStream()
-        # creazione delle funzioni a parametri fissati
-        f_z2, f_grad_z, f_grad_U, f_zeromode_z, f_zeromode_X, f_ener, f_twist, f_roots, f_exp = create_kernels(F, Npoint, max_ptord, n_comps)
+        s = streams[i]
 
         @inbounds @views M1_ker[i] = compile_kernel(f_twist, (M1[:,:,:,:,:,:,i],), Npoint2, s)
         @inbounds @views zscaled2_ker[i] = compile_kernel(f_z2, (z[:,:,:,:,:,i], nu_vacuum, zscaled2[:,:,:,i]), Npoint2, s)

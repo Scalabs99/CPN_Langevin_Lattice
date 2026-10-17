@@ -65,8 +65,25 @@ function get_remaining_time(jobid::String)
         end
         return 100000
     end
-    t = read(`squeue -h -j $jobid -o "%L"`, String)
-    return get_seconds(t)
+    cmd = `squeue -h -j $jobid -o "%L"`
+
+    # Effettua fino a 5 tentativi distanziati se Slurm va in timeout
+    for attempt in 1:5
+        try
+            output = strip(read(cmd, String))
+            if !isempty(output)
+                return get_seconds(output)
+            end
+        catch err
+            @warn current_time() * "Tentativo $attempt/5: squeue fallito (timeout demone Slurm). Riprovo tra 3s..."
+            sleep(3)
+        end
+    end
+
+    # Se dopo 5 tentativi il controller Slurm non risponde, non abortire la simulazione:
+    # Restituisce un tempo residuo prudenziale elevato (es. 2 ore) per permettere al ciclo di andare avanti
+    @warn current_time() * "Slurm irraggiungibile dopo 5 tentativi. Fallback a 7200s per non interrompere il calcolo."
+    return 7200
 end
 
 function get_remaining_time()

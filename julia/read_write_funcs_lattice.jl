@@ -54,8 +54,38 @@ function get_job_name()
     return get(ENV, "SLURM_JOB_NAME", "")
 end
 
+# --- Timer interno per evitare timeout di squeue su Leonardo ---
+const SIM_START_TIME = time()
+const JOB_WALLTIME_LIMIT = Ref{Float64}(-1.0)
+
+function init_job_time_limit(jobid::String)
+    # 1. Prova a leggere il limite in minuti direttamente dalle variabili d'ambiente Slurm
+    if haskey(ENV, "SLURM_TIME_LIMIT")
+        try
+            return parse(Float64, ENV["SLURM_TIME_LIMIT"]) * 60.0
+        catch
+        end
+    end
+
+    # 2. Se non presente in ENV, interroga squeue UNA SOLA VOLTA all'avvio
+    #    ignorestatus evita il blocco o l'errore non gestito se Slurm ritarda la risposta
+    if jobid != ""
+        try
+            cmd = ignorestatus(`squeue -h -j $jobid -o "%l"`)
+            out = strip(read(cmd, String))
+            if !isempty(out) && !occursin("error", lowercase(out))
+                return Float64(get_seconds(out))
+            end
+        catch
+        end
+    end
+
+    # 3. Fallback di sicurezza: default a 24 ore (in secondi) se Slurm non risponde
+    return 24.0 * 3600.0
+end
+
 function get_remaining_time(jobid::String)
-    if jobid == "" 
+    if jobid == ""
         fname = "remaining_time.txt"
         if isfile(fname)
             f = open(fname)
@@ -65,25 +95,17 @@ function get_remaining_time(jobid::String)
         end
         return 100000
     end
-    cmd = `squeue -h -j $jobid -o "%L"`
 
-    # Effettua fino a 5 tentativi distanziati se Slurm va in timeout
-    for attempt in 1:5
-        try
-            output = strip(read(cmd, String))
-            if !isempty(output)
-                return get_seconds(output)
-            end
-        catch err
-            @warn current_time() * "Tentativo $attempt/5: squeue fallito (timeout demone Slurm). Riprovo tra 3s..."
-            sleep(3)
-        end
+    # Inizializza il limite complessivo solo alla prima chiamata
+    if JOB_WALLTIME_LIMIT[] < 0.0
+        JOB_WALLTIME_LIMIT[] = init_job_time_limit(jobid)
     end
 
-    # Se dopo 5 tentativi il controller Slurm non risponde, non abortire la simulazione:
-    # Restituisce un tempo residuo prudenziale elevato (es. 2 ore) per permettere al ciclo di andare avanti
-    @warn current_time() * "Slurm irraggiungibile dopo 5 tentativi. Fallback a 7200s per non interrompere il calcolo."
-    return 7200
+    # Calcola il tempo rimanente sottraendo il tempo trascorso dall'avvio
+    elapsed = time() - SIM_START_TIME
+    remaining = JOB_WALLTIME_LIMIT[] - elapsed
+
+    return max(0, round(Int, remaining))
 end
 
 function get_remaining_time()

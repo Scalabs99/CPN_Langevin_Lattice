@@ -8,44 +8,19 @@ include("read_write_funcs_lattice.jl")
 include("CPN_kernels_lattice.jl")
 include("load_config_lattice.jl")
 
-function initialize_M1!(M1_ker::Array{CompiledKernel})
-    # Calcola una volta per tutte le matrici di twist 
-    CUDA.@sync begin
-        for i in eachindex(M1_ker)
-            @inbounds run_kernel(M1_ker[i])
-        end
-    end 
-    return nothing 
-
-end 
-
 function compute_gradients!(
-    grad_ker_z::Array{CompiledKernel}, 
-    grad_ker_U::Array{CompiledKernel}, 
-    zscaled2_ker::Array{CompiledKernel},
-    roots_ker::Array{CompiledKernel},
+    grad_ker_z::CompiledKernel, 
+    grad_ker_U::CompiledKernel, 
+    zscaled2_ker::CompiledKernel,
+    roots_ker::CompiledKernel,
 )
     # Questa funzione calcola -grad_U e -grad_z
-    CUDA.@sync begin  # Calcola z riscalato per il vuoto e poi lo eleva alla seconda 
-        for i in eachindex(zscaled2_ker)  
-            @inbounds run_kernel(zscaled2_ker[i])
-        end
-    end
-    CUDA.@sync begin # Calcola la radice e l'inverso della radice 
-        for i in eachindex(roots_ker)
-            @inbounds run_kernel(roots_ker[i])
-        end 
-    end
-    CUDA.@sync begin 
-        for i in eachindex(grad_ker_z)
-            @inbounds run_kernel(grad_ker_z[i])
-        end 
-    end 
-    CUDA.@sync begin 
-        for i in eachindex(grad_ker_U)
-            @inbounds run_kernel(grad_ker_U[i])
-        end 
-    end 
+    
+    run_kernel(zscaled2_ker)
+    run_kernel(roots_ker)
+    run_kernel(grad_ker_z)
+    run_kernel(grad_ker_U)
+
     return nothing 
 end
 
@@ -337,7 +312,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
         @inbounds @views compute_ener_ker[i] = compile_kernel(f_ener, (z[:,:,:,:,:,i], U[:,:,:,:,:,i], ener[:,:,:,i], root_z2[:,:,:,i], M1[:,:,:,:,:,:,i], nu_vacuum, c_sc_buffA[:,:,:,:,i], sc_buffA[:,:,:,i], vec_buffer_comp[:,:,:,:,:,i]), Npoint2)
     end
 
-    initialize_M1!(M1_ker)
+    run_kernel(M1_ker)
     
     print(current_time(), "Variables initialization and Kernel compilation successfully completed. ")
     println("Simulation is starting...")

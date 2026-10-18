@@ -44,7 +44,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         k::I = div(ind-one(I), Npoint) + one(I)
 
         #assign an index to the copies 
-        c = (blockIdy().y - one(I)) * blockDim().y + threadIdy().y
+        c::I = (blockIdx().y - one(I)) * blockDim().y + threadIdx().y
         return (i, k, c)
     end
     
@@ -749,30 +749,5 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end 
 
-    function zeromode_z_kernel!(z::CuDeviceArray{F, 6, 1}, zero_modo_z::CuDeviceArray{F, 4, 1})
-        i, k = get_indexes()
-        if (i <= Npoint && k <= Npoint && c <= n_copies)
-            for n::I = 1:n_comps 
-                for j::I = 2:n_ptords 
-                    @inbounds z[I(1),j,i,k,n,c] -= zero_modo_z[I(1), j, n, c]
-                    @inbounds z[I(2),j,i,k,n,c] -= zero_modo_z[I(2), j, n, c]
-                end 
-            end 
-        end
-        return nothing
-    end
-
-    function zeromode_X_kernel!(X::CuDeviceArray{F, 5, 1}, zero_modo_X::CuDeviceArray{F, 3, 1})
-        i, k = get_indexes()
-        if (i <= Npoint && k <= Npoint && c <= n_copies)
-            for mu::I = 1:2 
-                for j::I = 2:n_ptords
-                    @inbounds X[j,i,k,mu,c] -= zero_modo_X[j, mu, c]
-                end 
-            end 
-        end 
-        return nothing 
-    end 
-
-    return (zscaled2_kernel!, grad_z_kernel!, grad_U_kernel!, zeromode_z_kernel!, zeromode_X_kernel!, ener_kernel!, init_M1_kernel!, roots_kernel!, ExpU_kernel!)
+    return (zscaled2_kernel!, grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, roots_kernel!, ExpU_kernel!)
 end

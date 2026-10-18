@@ -1,5 +1,5 @@
-struct CompiledKernel{T <: Integer, DimsT <: Tuple}
-    args::Tuple
+struct CompiledKernel{ArgsT <: Tuple, DimsT <: Tuple}
+    args::ArgsT
     kernel::CUDA.HostKernel
     threads::DimsT
     blocks::DimsT

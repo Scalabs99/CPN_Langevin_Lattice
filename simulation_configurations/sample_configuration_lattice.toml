@@ -15,7 +15,7 @@ vacuum_filename        = ""        # vacuum filename path -> if "" then the simu
 measure_every              =          7  # number of measurements to skip between two saved measures. Default = 1
 n_copies                   =         10  # number of lattice copies to be simulated in parallel. Default = 1
 energy_site_by_site_matlab = "file.mat"  # name of the matlab file to save the energy site-by-site. Default = nothing
-max_saving_time            =        600  # time, in seconds, allocated to state saving before exiting. Default = 10 min
+max_execution_time         = "23:50:00"  # string, in format "D-HH:MM:SS", of maximum execution time; leave enough time to save the state before exiting. Default = "23:50:00"
 # cuda_seed                =          0  # seed for the cuda rng. Default = nothing (random)
 # intBits   = 32  # Either 32 (for   Int32 variables on GPU) or 64 (for   Int64 variables on GPU). Default = 32
 # floatBits = 32  # Either 32 (for Float32 variables on GPU) or 64 (for Float64 variables on GPU). Default = 32

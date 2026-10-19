@@ -160,7 +160,7 @@ end
 end
 
 
-function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: Integer, I2 <: Integer}
+function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
     
     # Print some logging information
     println(get_infos_string(args; header="[Simulation Infos]: ", prepend="\n", append="\n"))
@@ -181,6 +181,7 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     U             = args.U 
     nu_vacuum     = args.nu_vacuum
     U_vacuum      = args.U_vacuum
+    
 
     # Determine if we should save lattice data
     save_lattice = args.lat_fname !== nothing
@@ -264,8 +265,6 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
     print(current_time(), "Variables initialization and Kernel compilation successfully completed. ")
     println("Simulation is starting...")
 
-    jobid = get_job_id()
-
     # Main computation loop
     for t = args.iter_start:n_meas
         for _ in 1:measure_every
@@ -303,14 +302,15 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             @inbounds @views write_line(mean_energy_files[i], Array(energia[:, i]))
         end
         args.iter_start = t + 1
-
-        println("Iterazione $t completata. Tempo passato dall'avvio: ", round(time() - SIM_START_TIME), " sec. Tempo rimanente stimato: ", get_remaining_time(jobid), " sec.")
         
-        if get_remaining_time(jobid) < args.max_saving_time
-            println(current_time(), "Saving status.")
-            save_state(checkpt_fname, args)  # Z e U sono salvati automaticamente qui! Non ho più bisogno di x_back  
-            println(current_time(), "Saving status completed.")
-            execute_self(checkpt_fname)
+        end_time = SIM_START_TIME + get_seconds(args.max_execution_time)
+
+        println("Iterazione $t completata. Tempo passato dall'avvio: ", round(time() - SIM_START_TIME), " sec.")
+
+        if time() >= end_time
+            println("[INFO]: Tempo massimo di esecuzione raggiunto. Avvio salvataggio sicuro.")
+            save_state(args.checkpt_fname, args)
+            execute_self(args.checkpt_fname)
             return
         end
     end
@@ -373,7 +373,7 @@ function launch_main_Lang(config_fname::String)
     
     args = LangRK_args(
         conf.Npoint, conf.n_meas, conf.dt, conf.n_comps, conf.max_ptord, conf.measure_every, conf.n_copies,
-        cuda_rng, conf.en_fname, config_fname, conf.checkpt_fname, conf.max_saving_time, one(conf.Npoint),
+        cuda_rng, conf.en_fname, config_fname, conf.checkpt_fname, conf.max_execution_time, one(conf.Npoint),
         z_init, U_init, nu_vacuum, U_vacuum, 
         conf.lat_file, isnothing(conf.lat_file) ? nothing : CUDA.zeros(floatType, n_ords, conf.Npoint, conf.Npoint, conf.n_copies, conf.n_meas)
     )
@@ -420,7 +420,7 @@ function resume_main_Lang(checkpt_fname::String)
     
     args = LangRK_args(
         conf.Npoint, conf.n_meas, conf.dt, conf.n_comps, conf.max_ptord, conf.measure_every, conf.n_copies,
-        cuda_rng, conf.en_fname, config_fname, conf.checkpt_fname, conf.max_saving_time, 
+        cuda_rng, conf.en_fname, config_fname, conf.checkpt_fname, conf.max_execution_time, 
         cpu_data["iter_start"], # L'iterazione salvata
         z_resume, U_resume, nu_vacuum, U_vacuum, 
         conf.lat_file, ener_meas_resume

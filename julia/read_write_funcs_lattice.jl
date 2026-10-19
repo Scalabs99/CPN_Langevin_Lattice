@@ -54,70 +54,7 @@ function get_job_name()
     return get(ENV, "SLURM_JOB_NAME", "")
 end
 
-# --- Timer interno per evitare timeout di squeue su Leonardo ---
 const SIM_START_TIME = time()
-const JOB_WALLTIME_LIMIT = Ref{Float64}(-1.0)
-
-function init_job_time_limit(jobid::String)
-    # 1. Prova a leggere la variabile Slurm usando la TUA funzione infallibile get_seconds!
-    if haskey(ENV, "SLURM_TIME_LIMIT")
-        val = ENV["SLURM_TIME_LIMIT"]
-        try
-            # Se la stringa contiene ":" o "-" (es. "00:15:00" o "1-00:00:00")
-            if occursin(":", val) || occursin("-", val)
-                return Float64(get_seconds(val))
-            else
-                # Se è solo un numero semplice in minuti (es. "15")
-                return parse(Float64, val) * 60.0
-            end
-        catch
-            # Se fallisce, passa silenziosamente al punto 2
-        end
-    end
-
-    # 2. Interroga squeue (che sui nodi wn fallirà, ma lo lasciamo per altri cluster)
-    if jobid != ""
-        try
-            cmd = ignorestatus(`squeue -h -j $jobid -o "%l"`)
-            out = strip(read(cmd, String))
-            if !isempty(out) && !occursin("error", lowercase(out))
-                return Float64(get_seconds(out))
-            end
-        catch
-        end
-    end
-
-    # 3. Fallback di sicurezza: default a 24 ore
-    return 24.0 * 3600.0
-end
-
-function get_remaining_time(jobid::String)
-    if jobid == ""
-        fname = "remaining_time.txt"
-        if isfile(fname)
-            f = open(fname)
-            t = tryparse(Int, readline(f))
-            close(f)
-            t !== nothing && return t
-        end
-        return 100000
-    end
-
-    # Inizializza il limite complessivo solo alla prima chiamata
-    if JOB_WALLTIME_LIMIT[] < 0.0
-        JOB_WALLTIME_LIMIT[] = init_job_time_limit(jobid)
-    end
-
-    # Calcola il tempo rimanente sottraendo il tempo trascorso dall'avvio
-    elapsed = time() - SIM_START_TIME
-    remaining = JOB_WALLTIME_LIMIT[] - elapsed
-
-    return max(0, round(Int, remaining))
-end
-
-function get_remaining_time()
-    return get_remaining_time(get_job_id())
-end
 
 function save_state(fname::String, args)
     cpu_data = Dict(
@@ -211,7 +148,7 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
     return nu_cpu, U_cpu
 end
 
-mutable struct LangRK_args{F <: AbstractFloat, I <: Integer, I2 <: Integer}
+mutable struct LangRK_args{F <: AbstractFloat, I <: Integer}
     const Npoint::I
     const n_meas::I
     const dt::F
@@ -223,7 +160,7 @@ mutable struct LangRK_args{F <: AbstractFloat, I <: Integer, I2 <: Integer}
     const en_fname::String
     const config_fname::String
     const checkpt_fname::String
-    const max_saving_time::I2
+    const max_execution_time::String 
     iter_start::I
     z::CuArray{F, 6} 
     U::CuArray{F, 6} 

@@ -76,13 +76,13 @@ function parse_config_file(fname, checkpt_fname=nothing)
         lat_file = nothing
     end
     cuda_seed         = Int(get(cfg, "cuda_seed", 0))
-    max_saving_time   = Int(get(cfg, "max_saving_time", 600))
+    max_execution_time = get(cfg, "max_execution_time", "23:50:00")
 
     vac_fname         = get(cfg, "vacuum_filename", "")
 
     return (
         Npoint = Npoint, n_meas = n_meas, dt = dt, n_comps = n_comps, max_ptord = max_ptord,
         en_fname = en_fname, checkpt_fname = checkpt_fname, measure_every = measure_every, n_copies = n_copies,
-        lat_file = lat_file, cuda_seed = cuda_seed, max_saving_time = max_saving_time, vac_fname = vac_fname
+        lat_file = lat_file, cuda_seed = cuda_seed, max_execution_time = max_execution_time, vac_fname = vac_fname
     )
 end

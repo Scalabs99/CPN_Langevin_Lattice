@@ -59,16 +59,23 @@ const SIM_START_TIME = time()
 const JOB_WALLTIME_LIMIT = Ref{Float64}(-1.0)
 
 function init_job_time_limit(jobid::String)
-    # 1. Prova a leggere il limite in minuti direttamente dalle variabili d'ambiente Slurm
+    # 1. Prova a leggere la variabile Slurm usando la TUA funzione infallibile get_seconds!
     if haskey(ENV, "SLURM_TIME_LIMIT")
+        val = ENV["SLURM_TIME_LIMIT"]
         try
-            return parse(Float64, ENV["SLURM_TIME_LIMIT"]) * 60.0
+            # Se la stringa contiene ":" o "-" (es. "00:15:00" o "1-00:00:00")
+            if occursin(":", val) || occursin("-", val)
+                return Float64(get_seconds(val))
+            else
+                # Se è solo un numero semplice in minuti (es. "15")
+                return parse(Float64, val) * 60.0
+            end
         catch
+            # Se fallisce, passa silenziosamente al punto 2
         end
     end
 
-    # 2. Se non presente in ENV, interroga squeue UNA SOLA VOLTA all'avvio
-    #    ignorestatus evita il blocco o l'errore non gestito se Slurm ritarda la risposta
+    # 2. Interroga squeue (che sui nodi wn fallirà, ma lo lasciamo per altri cluster)
     if jobid != ""
         try
             cmd = ignorestatus(`squeue -h -j $jobid -o "%l"`)
@@ -80,7 +87,7 @@ function init_job_time_limit(jobid::String)
         end
     end
 
-    # 3. Fallback di sicurezza: default a 24 ore (in secondi) se Slurm non risponde
+    # 3. Fallback di sicurezza: default a 24 ore
     return 24.0 * 3600.0
 end
 

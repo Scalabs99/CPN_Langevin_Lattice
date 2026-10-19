@@ -402,20 +402,47 @@ function launch_main_Lang(config_fname::String)
 end
 
 function resume_main_Lang(checkpt_fname::String)
-    # Resumes execution
     if !isfile(checkpt_fname)
         error("Checkpoint file $checkpt_fname not found.")
-        return
     end
-    # Load config file
-    args = deserialize(checkpt_fname)
+    
     curr_time = current_time()
-    println(curr_time, "Checkpoint file found.")
-    curr_time = " "^(length(curr_time)-length("[INFO]: ")) * "[INFO]: "
-    println(curr_time, "Configuration file: ", args.config_fname, " (could be outdated).")
-    println(curr_time, "Checkpoint file: ", checkpt_fname)
-    println(curr_time, "Energy file: ", args.en_fname)
+    println(curr_time, "Checkpoint file found: ", checkpt_fname)
+    
+    # Carica il dizionario con i dati CPU
+    cpu_data = deserialize(checkpt_fname)
+    config_fname = cpu_data["config_fname"]
+    
+    println(curr_time, "Configuration file: ", config_fname)
     println(curr_time, "Resuming execution...")
+    
+    # 1. Ricarica la configurazione di base partendo dal TOML
+    conf = parse_config_file(config_fname)
+    cuda_rng = conf.cuda_seed == 0 ? CUDA.RNG() : CUDA.RNG(conf.cuda_seed)
+    floatType = typeof(conf.dt)
+    n_ords = conf.max_ptord + one(conf.max_ptord)
+    N_colors = conf.n_comps + one(conf.n_comps)
+    
+    nu_cpu, U_vac_cpu = load_C_config(floatType, conf.vac_fname, conf.Npoint, N_colors)
+    nu_vacuum = CuArray(floatType.(nu_cpu))
+    U_vacuum = CuArray(floatType.(U_vac_cpu))
+    
+    # 2. Crea la struct degli argomenti, ma invece di partire da zero...
+    # INIETTA DIRETTAMENTE I DATI GPU RICAVATI DAL CHECKPOINT!
+    z_resume = CuArray(cpu_data["z"])
+    U_resume = CuArray(cpu_data["U"])
+    ener_meas_resume = cpu_data["ener_meas"] === nothing ? nothing : CuArray(cpu_data["ener_meas"])
+    
+    args = LangRK_args(
+        conf.Npoint, conf.n_meas, conf.dt, conf.n_comps, conf.max_ptord, conf.measure_every, conf.n_copies,
+        cuda_rng, conf.en_fname, config_fname, conf.checkpt_fname, conf.max_saving_time, 
+        cpu_data["iter_start"], # L'iterazione salvata
+        z_resume, U_resume, nu_vacuum, U_vacuum, 
+        conf.lat_file, ener_meas_resume
+    )
+    
+    # 3. Lancia il main con lo stato ripristinato
     main_Lang(args)
+
     return
 end

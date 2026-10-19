@@ -112,9 +112,16 @@ function get_remaining_time()
     return get_remaining_time(get_job_id())
 end
 
-function save_state(fname::String, data)
-    serialize(fname, data)
-    println(current_time(), "State saved to file \"" * fname * "\"")
+function save_state(fname::String, args::LangRK_args)
+    cpu_data = Dict(
+        "config_fname" => args.config_fname, # Aggiungi questo!
+        "iter_start"   => args.iter_start,
+        "z"            => Array(args.z),
+        "U"            => Array(args.U),
+        "ener_meas"    => args.ener_meas === nothing ? nothing : Array(args.ener_meas)
+    )
+    serialize(fname, cpu_data)
+    println(current_time(), "State saved safely to file \"" * fname * "\"")
     return
 end
 

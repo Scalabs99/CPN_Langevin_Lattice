@@ -112,7 +112,7 @@ function get_remaining_time()
     return get_remaining_time(get_job_id())
 end
 
-function save_state(fname::String, args::LangRK_args)
+function save_state(fname::String, args)
     cpu_data = Dict(
         "config_fname" => args.config_fname, # Aggiungi questo!
         "iter_start"   => args.iter_start,

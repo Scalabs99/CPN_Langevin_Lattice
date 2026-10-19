@@ -266,14 +266,6 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
 
     jobid = get_job_id()
 
-    CUDA.@allowscalar begin 
-        println("Campione campo U all'ordine zero: ", U[1, 1, 1, 1, 1, 1])
-        println("z_Re al tempo zero: ", z[1, 2, 1, 1, 1, 1])
-        println("z_Im al tempo zero: ", z[2, 1, 1, 1, 1, 1])
-    end 
-
-
-
     # Main computation loop
     for t = args.iter_start:n_meas
         for _ in 1:measure_every
@@ -299,15 +291,6 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
         end
         
-        CUDA.@allowscalar begin
-            println("Campione rumore X: ", noise_X[2, 1, 1, 1, 1])
-            println("Campione rumore z: ", noise_z[1, 2, 1, 1, 1, 1])
-            println("Campione campo z: ", z[1, 2, 1, 1, 1, 1])
-            println("Campione campo U: ", U[2, 2, 1, 1, 1, 1])
-            println("Campione gradiente di U: ", gradient_U[1, 1, 1, 1, 1])
-            println("Campione gradiente di z: ", gradient_z[1, 1, 1, 1, 1, 1])
-        end
-        
         compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener_ker)
            
         
@@ -320,6 +303,8 @@ function main_Lang(args::LangRK_args{F, I, I2}) where {F <: AbstractFloat, I <: 
             @inbounds @views write_line(mean_energy_files[i], Array(energia[:, i]))
         end
         args.iter_start = t + 1
+
+        println("Iterazione $t completata. Tempo passato dall'avvio: ", round(time() - SIM_START_TIME), " sec. Tempo rimanente stimato: ", get_remaining_time(jobid), " sec.")
         
         if get_remaining_time(jobid) < args.max_saving_time
             println(current_time(), "Saving status.")

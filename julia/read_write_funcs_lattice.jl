@@ -92,23 +92,16 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
     if vac_fname == ""
         println(current_time(), "[INFO]: Nessun file del vuoto specificato. Inizializzazione al vuoto banale.")
         
-        # Vuoto banale per Z: parte reale [indice 1] dell'ultimo "colore" [N_colors] uguale a 1
         nu_cpu[1, :, :, N_colors] .= F(1)
-        
-        # Vuoto banale per U: parte reale [indice 1] di tutti i link uguale a 1 nella direzione spaziale 
         U_cpu[1, :, :, :] .= F(1)
         phase = F(2.0 * pi * (N_colors - 1) / N_colors)
-        re_phase = cos(phase)
-        im_phase = sin(phase)
-
-        U_cpu[1, Npoint, :, 1] .= re_phase
-        U_cpu[2, Npoint, :, 1] .= -im_phase 
-
+        
+        U_cpu[1, Npoint, :, 1] .= F(cos(phase))
+        U_cpu[2, Npoint, :, 1] .= F(-sin(phase))
         
         return nu_cpu, U_cpu
     end
 
-    # 3. Se invece il nome c'è ma il file non esiste, diamo errore per evitare simulazioni finte
     if !isfile(vac_fname)
         error("Vacuum file specificato ma non trovato: ", vac_fname)
     end
@@ -127,21 +120,19 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
         
         for x in 1:Npoint
             for t in 1:Npoint
-                z_site = zeros(ComplexF64, N_colors)
-                read!(f, z_site)
                 
+                # Legge e inverte i byte (Big-Endian -> Native) per ogni colore
                 for c in 1:N_colors
-                    nu_cpu[1, t, x, c] = F(real(z_site[c]))
-                    nu_cpu[2, t, x, c] = F(imag(z_site[c]))
+                    nu_cpu[1, t, x, c] = F(ntoh(read(f, Float64)))
+                    nu_cpu[2, t, x, c] = F(ntoh(read(f, Float64)))
                 end
                 
-                u_site = zeros(ComplexF64, 2)
-                read!(f, u_site)
-                
+                # Legge e inverte i byte per ogni direzione di gauge
                 for mu in 1:2
-                    U_cpu[1, t, x, mu] = F(real(u_site[mu]))
-                    U_cpu[2, t, x, mu] = F(imag(u_site[mu]))
+                    U_cpu[1, t, x, mu] = F(ntoh(read(f, Float64)))
+                    U_cpu[2, t, x, mu] = F(ntoh(read(f, Float64)))
                 end
+                
             end
         end
     end

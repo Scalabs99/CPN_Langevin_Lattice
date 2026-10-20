@@ -239,7 +239,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         
             # Calcola \sum_n |z_n / val_vac|^2 
             for n::I = 1:n_comps
-                for j::I = 1:n_ptords
+                for j::I = 2:n_ptords
                     for l::I = 1:j
                         # Z normale ad ordine l
                         @inbounds z_Re = z[I(1), l, i, k, n, c]

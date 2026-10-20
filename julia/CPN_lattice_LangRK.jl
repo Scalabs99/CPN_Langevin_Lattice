@@ -265,6 +265,13 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     print(current_time(), "Variables initialization and Kernel compilation successfully completed. ")
     println("Simulation is starting...")
 
+    CUDA.@allowscalar begin 
+        println("Campione campo U all'ordine zero: ", U[1, 1, 1, 1, 1, 1])
+        println("z_Re al tempo zero: ", z[1, 1, 1, 1, 1, 1])
+        println("z_Im al tempo zero: ", z[2, 1, 1, 1, 1, 1])
+    end 
+
+
     # Main computation loop
     for t = args.iter_start:n_meas
         for _ in 1:measure_every

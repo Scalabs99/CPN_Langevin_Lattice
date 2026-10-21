@@ -287,12 +287,16 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U, zscaled2_ker, roots_ker)
+            max_val = CUDA.maximum(abs.(zscaled2[j, :, :]))
+            println("Step Langevin $t, Ordine $j - Max zscaled2: $max_val")
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, ExpU_Eu_ker, N_colors, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, N_colors)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
+            max_val = CUDA.maximum(abs.(zscaled2[j, :, :]))
+            println("Step Langevin $t, Ordine $j - Max zscaled2: $max_val")
             RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, noise_X, dt, X, ExpU_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
         end

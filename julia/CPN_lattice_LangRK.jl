@@ -217,6 +217,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     noise_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), N_colors, n_copies)
+    zero_modo_z = CUDA.zeros(I(2), n_ords, n_comps, n_copies)
+
 
     energia = CUDA.zeros(F, n_ords, n_copies)
     ener = CUDA.zeros(F, n_ords, Npoint, Npoint, n_copies)
@@ -240,7 +242,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     end
     
     # creazione delle funzioni a parametri fissati
-    f_z2, f_grad_z, f_grad_U, f_ener, f_twist, f_roots, f_exp = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
+    f_z2, f_grad_z, f_grad_U, f_ener, f_twist, f_roots, f_exp, f_zeromode = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
 
     # compilazione dei kernel e creazione di struct con i kernel compilati
 
@@ -257,6 +259,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradker_z_Eu = compile_kernel(f_grad_z, (z_Eu, nu_vacuum, U_Eu, gradz_Eu, root_z2, invroot_z2, M1, vec_buffer_comp, c_sc_buffA, c_sc_buffB, sc_buffA), Npoint2, n_copies)
     gradker_U_Eu = compile_kernel(f_grad_U, (gradU_Eu, U_Eu, z_Eu, M1, root_z2, nu_vacuum, c_sc_buffB, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
     ExpU_Eu_ker = compile_kernel(f_exp, (X, Exp_buffer, U, U_Eu, sc_buffA, sc_buffB), Npoint2, n_copies)
+
   
     compute_ener_ker = compile_kernel(f_ener, (z, U, ener, root_z2, M1, nu_vacuum, c_sc_buffA, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
 
@@ -280,10 +283,10 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             reset_noise_X!(noise_X, cuda_rng)
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
-            noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
-            noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
-            @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
-            @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X # Non serve il CUDA.@sync in queste righe 
+            @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,1:1,:], dims=(3, 4)) ./ Npoint2
+            #noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
+            @views noise_z[:,2:2,:,:,1:1,:] .-= noise_mean_z
+            #@inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X # Non serve il CUDA.@sync in queste righe 
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U, zscaled2_ker, roots_ker)
@@ -301,6 +304,17 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             compute_gradients!(gradker_z_Eu, gradker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
             RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, noise_X, dt, X, ExpU_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
+
+            # 1. Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
+            # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
+            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+
+            # 2. Sottrai il modo zero in-place 
+            # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
+            # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
+            CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+
+
         end
         
         compute_energy!(energia, ener, Npoint2, zscaled2_ker, roots_ker, compute_ener_ker)

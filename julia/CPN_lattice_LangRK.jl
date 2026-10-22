@@ -290,7 +290,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U, zscaled2_ker, roots_ker)
-            slice_cpu = Array(zscaled2[3, :, :, :])
+            slice_cpu = Array(zscaled2[2, :, :, :])
             max_val, max_idx = findmax(abs.(slice_cpu))
 
             # max_idx sarà un CartesianIndex(x, y). Lo formattiamo per comodità:

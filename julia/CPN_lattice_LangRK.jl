@@ -318,6 +318,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
 
+            if t <= 3
+                println("[DIAGNOSTICA] Salvataggio del tensore z per lo step $t...")
+                # Trasferisce l'array dalla GPU alla CPU con Array(z) e lo salva
+                serialize("z_diagnostica_step_$(t).jls", Array(z))
+            end
+
 
         end
         

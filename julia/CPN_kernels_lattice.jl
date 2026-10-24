@@ -16,7 +16,7 @@ using CUDA
 function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies::I) where {F <: AbstractFloat, I <: Integer}
 
     n_ptords = max_ptord + one(I) # total number of perturbative orders
-    N_colors = n_comps + one(n_comps) #total number of colors 
+    #N_colors = n_comps + one(n_comps) total number of colors --> non serve più, basta dire che n_comps è il numero totale di componenti 
 
     # Functions returning the coordinates of the nearest neighbour of site (i, k) in the given direction
     # Are there periodic boundary conditions?? 
@@ -219,133 +219,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end 
 
-    function zscaled2_kernel!(
-    z::CuDeviceArray{F, 6, 1}, 
-    nu_vacuum::CuDeviceArray{F, 4, 1}, 
-    zscaled2::CuDeviceArray{F, 4, 1} # Risultato finale, array 3D!
-    )
-        i, k, c = get_indexes()
-
-        if (i <= Npoint && k <= Npoint && c <= n_copies)
-            # Estrai il valore del vuoto per la componente N-esima
-            idx_N = n_comps + I(1)
-            @inbounds val_vac = nu_vacuum[I(1), i, k, idx_N]
-            val_vac2 = val_vac * val_vac # Modulo quadro del vuoto classico --> quadrato dell'ultima componente di nu!!
-        
-            # Inizializza a zero l'accumulatore per tutti gli ordini
-            for j::I = 1:n_ptords
-                @inbounds zscaled2[j, i, k, c] = zero(F)
-            end
-        
-            # Calcola \sum_n |z_n / val_vac|^2 
-            for n::I = 1:n_comps
-                for j::I = 2:n_ptords
-                    for l::I = 1:j
-                        # Z normale ad ordine l
-                        @inbounds z_Re = z[I(1), l, i, k, n, c]
-                        @inbounds z_Im = z[I(2), l, i, k, n, c]
-                    
-                        # Z coniugato ad ordine j-l+I(1)
-                        @inbounds z_conj_Re = z[I(1), j-l+I(1), i, k, n, c]
-                        @inbounds z_conj_Im = -z[I(2), j-l+I(1), i, k, n, c]
-                    
-                        # Moltiplica, estrai la parte reale e dividi per val_vac^2
-                        parte_reale = (z_Re * z_conj_Re - z_Im * z_conj_Im) / val_vac2
-                    
-                        @inbounds zscaled2[j, i, k, c] += parte_reale
-                    end
-                end
-            end
-        end
-        return nothing
-    end
-
-    @inline function radice_taylor!(
-        x::CuDeviceArray{F, 4, 1}, i::I, k::I, c::I, 
-        risultato::CuDeviceArray{F, 4, 1},
-        potenza_corrente::CuDeviceArray{F, 4, 1},
-        temp::CuDeviceArray{F, 4, 1}
-    )
-        # Sviluppo di sqrt(1 - x) = 1 - 1/2 x - 1/8 x^2 - 1/16 x^3 - ...
-        for j::I = 1:n_ptords
-            @inbounds risultato[j, i, k, c] = zero(F)
-            @inbounds potenza_corrente[j, i, k, c] = x[j, i, k, c] # x all'ordine 1
-        end
-        @inbounds risultato[1, i, k, c] = one(F) # Ordine 0 è 1
-
-        C_m = F(-0.5) # Coefficiente per m=1
-
-        # Aggiungiamo il termine m=1 -> per j=1 non ho problemi, perché zscaled2 è zero a j=1 !!! 
-        for j::I = 1:n_ptords
-            @inbounds risultato[j, i, k, c] += C_m * potenza_corrente[j, i, k, c] # Ha senso, pensa allo sviluppo della radice  
-        end
-
-        # Calcolo iterativo per m >= 2
-        for m::I = 2:(max_ptord)
-            C_m = C_m * F(m - 1.5) / F(m) # Ricorsione esatta del coefficiente ( è il coefficiente binomiale )
-            mult_sc_diffsites!(potenza_corrente, x, temp, i, k, i, k, i, k, c) # x^m = x^(m-1) * x
-            for j::I = 1:n_ptords
-                @inbounds potenza_corrente[j, i, k, c] = temp[j, i, k, c]
-                @inbounds risultato[j, i, k, c] += C_m * potenza_corrente[j, i, k, c]
-            end
-        end
-        return nothing
-    end
-
-    @inline function inv_radice_taylor!(
-        x::CuDeviceArray{F, 4, 1}, i::I, k::I, c::I, 
-        risultato::CuDeviceArray{F, 4, 1},
-        potenza_corrente::CuDeviceArray{F, 4, 1},
-        temp::CuDeviceArray{F, 4, 1}
-    )
-        # Sviluppo di 1 / sqrt(1 - x) = 1 + 1/2 x + 3/8 x^2 + 5/16 x^3 + ...
-        for j::I = 1:n_ptords
-            @inbounds risultato[j, i, k, c] = zero(F)
-            @inbounds potenza_corrente[j, i, k, c] = x[j, i, k, c]
-        end
-        @inbounds risultato[1, i, k, c] = one(F)
-
-        C_m = F(0.5) # Coefficiente per m=1
-
-        # Aggiungiamo il termine m=1
-        for j::I = 1:n_ptords
-            @inbounds risultato[j, i, k, c] += C_m * potenza_corrente[j, i, k, c]
-        end
-
-        # Calcolo iterativo per m >= 2
-        for m::I = 2:(max_ptord)
-            C_m = C_m * F(m - 0.5) / F(m) # Ricorsione esatta per l'inverso della radice
-            mult_sc_diffsites!(potenza_corrente, x, temp, i, k, i, k, i, k, c)
-            for j::I = 1:n_ptords
-                @inbounds potenza_corrente[j, i, k, c] = temp[j, i, k, c]
-                @inbounds risultato[j, i, k, c] += C_m * potenza_corrente[j, i, k, c]
-            end
-        end
-        return nothing
-    end
-    
-    function roots_kernel!(
-        zscaled2::CuDeviceArray{F, 4, 1}, 
-        root_zscaled2::CuDeviceArray{F, 4, 1}, 
-        invroot_zscaled2::CuDeviceArray{F, 4, 1}, 
-        sc_buffA::CuDeviceArray{F, 4, 1},
-        sc_buffB::CuDeviceArray{F, 4, 1}
-    )
-        i, k, c = get_indexes()
-        
-        if (i <= Npoint && k <= Npoint && c <= n_copies)
-            # 1. Calcola z^N(x) = sqrt(1 - zscaled2)
-            # Usa sc_buffA e sc_buffB come memoria temporanea
-            radice_taylor!(zscaled2, i, k, c, root_zscaled2, sc_buffA, sc_buffB)
-            
-            # Calcola 1 / z^N(x) = 1 / sqrt(1 - zscaled2)
-            # Ricicla la stessa memoria temporanea per il secondo calcolo
-            inv_radice_taylor!(zscaled2, i, k, c, invroot_zscaled2, sc_buffA, sc_buffB)
-        end 
-        
-        return nothing
-    end
-
     function init_M1_kernel!(M1::CuDeviceArray{F, 7, 1}) 
         
         i, k, c = get_indexes() 
@@ -428,103 +301,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return 
     end 
 
-    @inline function fwd_corrective_term!(
-        root::CuDeviceArray{F, 4, 1}, inv_root::CuDeviceArray{F, 4, 1}, 
-        z::CuDeviceArray{F, 6, 1}, U::CuDeviceArray{F, 6, 1}, result::CuDeviceArray{F, 6, 1}, 
-        i::I, k::I, i_fwd::I, k_fwd::I, c::I,     
-        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 7, 1}, mu::I, 
-        c_sc_buffA::CuDeviceArray{F, 5, 1}, c_sc_buffB::CuDeviceArray{F, 5, 1}, sc_buffA::CuDeviceArray{F, 4, 1}
-    )
-        
-        # Rapporto z^N(x+mu) / z^N(x) 
-        # Firma: out(i,k), a(i_bwd, k_bwd), b(i,k)
-        mult_sc_diffsites!(root, inv_root, sc_buffA, i_fwd, k_fwd, i, k, i, k, c) # rapporto delle radici 
-        
-        # Background e Matrice di Twist M(x) [Ordine g^0]
-        idx_N = n_comps + I(1)
-        @inbounds ratio_vac = nu_vac[I(1), i_fwd, k_fwd, idx_N] / nu_vac[I(1), i, k, idx_N]
-        
-        @inbounds M_re =  M[I(1), I(1), i, k, mu, idx_N, c] # La matrice è zero a tutti gli ordine superiori a quello banale 
-        @inbounds M_im =  -M[I(2), I(1), i, k, mu, idx_N, c] # questi sono gli ultimi elementi della matrice di twist 
-
-        for j::I = 1:n_ptords
-            @inbounds val = sc_buffA[j, i, k, c] * ratio_vac
-            @inbounds c_sc_buffA[I(1), j, i, k, c] = val * M_re
-            @inbounds c_sc_buffA[I(2), j, i, k, c] = val * M_im
-        end 
-
-       #Moltiplicazione per U_mu(x)
-        for j::I = 1:n_ptords
-            @inbounds c_sc_buffB[I(1), j, i, k, c] = zero(F)
-            @inbounds c_sc_buffB[I(2), j, i, k, c] = zero(F)
-            
-            for l::I = 1:j
-                # Prefattore calcolato al passo precedente
-                @inbounds A_re = c_sc_buffA[I(1), l, i, k, c]
-                @inbounds A_im = c_sc_buffA[I(2), l, i, k, c]
-                
-                # Link di gauge valutato in x 
-                @inbounds U_re =  U[I(1), j-l+I(1), i, k, mu, c] 
-                @inbounds U_im =  -U[I(2), j-l+I(1), i, k, mu, c] 
-                
-                @inbounds c_sc_buffB[I(1), j, i, k, c] -= (A_re * U_re - A_im * U_im)
-            end
-        end
-
-        mult_complvec_by_complscal!(z, c_sc_buffB, result, i, k, i, k, i, k, c)
-        
-        return 
-    end
-
-    @inline function bwd_corrective_term!(
-        root::CuDeviceArray{F, 4, 1}, inv_root::CuDeviceArray{F, 4, 1}, 
-        z::CuDeviceArray{F, 6, 1}, U::CuDeviceArray{F, 6, 1}, result::CuDeviceArray{F, 6, 1}, 
-        i::I, k::I, i_bwd::I, k_bwd::I, c::I,     
-        nu_vac::CuDeviceArray{F, 4, 1}, M::CuDeviceArray{F, 7, 1}, mu::I, 
-        c_sc_buffA::CuDeviceArray{F, 5, 1}, c_sc_buffB::CuDeviceArray{F, 5, 1}, sc_buffA::CuDeviceArray{F, 4, 1}
-    )
-        
-        # Rapporto z^N(x-mu) / z^N(x) 
-        # Firma: out(i,k), a(i_bwd, k_bwd), b(i,k)
-        mult_sc_diffsites!(root, inv_root, sc_buffA, i_bwd, k_bwd, i, k, i, k, c)
-        
-        # Background e Matrice di Twist M^\dagger(x-mu) [Ordine g^0]
-        idx_N = n_comps + I(1)
-        @inbounds ratio_vac = nu_vac[I(1), i_bwd, k_bwd, idx_N] / nu_vac[I(1), i, k, idx_N]
-        
-        @inbounds M_re =  M[I(1), I(1), i_bwd, k_bwd, mu, idx_N, c]
-        @inbounds M_im = -M[I(2), I(1), i_bwd, k_bwd, mu, idx_N, c] # Segno meno per l'Hermitiano coniugato
-
-        for j::I = 1:n_ptords
-            @inbounds val = sc_buffA[j, i, k, c] * ratio_vac
-            @inbounds c_sc_buffA[I(1), j, i, k, c] = val * M_re
-            @inbounds c_sc_buffA[I(2), j, i, k, c] = val * M_im
-        end 
-
-        # Moltiplicazione per U_mu^\dagger(x-mu)
-        for j::I = 1:n_ptords
-            @inbounds c_sc_buffB[I(1), j, i, k, c] = zero(F)
-            @inbounds c_sc_buffB[I(2), j, i, k, c] = zero(F)
-            
-            for l::I = 1:j
-                # Prefattore calcolato al passo precedente
-                @inbounds A_re = c_sc_buffA[I(1), l, i, k, c]
-                @inbounds A_im = c_sc_buffA[I(2), l, i, k, c]
-                
-                # Link di gauge valutato in x-mu 
-                @inbounds U_re =  U[I(1), j-l+I(1), i_bwd, k_bwd, mu, c]
-                @inbounds U_im = -U[I(2), j-l+I(1), i_bwd, k_bwd, mu, c] 
-                
-                @inbounds c_sc_buffB[I(1), j, i, k, c] -= (A_re * U_re - A_im * U_im) # --> siccome U è coniugato U_im ha il meno e quindi tornano i segni
-            end
-        end
-
-        mult_complvec_by_complscal!(z, c_sc_buffB, result, i, k, i, k, i, k, c)
-        
-        return 
-    end
-
-
     @inline function cmplx_scalar_prod!(z::CuDeviceArray{F, 6, 1}, conjMz::CuDeviceArray{F, 6, 1}, result::CuDeviceArray{F, 5, 1},
         i_a::I, k_a::I, i_b::I, k_b::I, i_out::I, k_out::I, c::I
     )
@@ -547,38 +323,22 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return 
     end 
 
-    @inline function cmplx_G1_func!(z::CuDeviceArray{F, 6, 1}, root::CuDeviceArray{F, 4, 1}, 
-        M::CuDeviceArray{F, 7, 1}, nu_vac::CuDeviceArray{F, 4, 1}, G1::CuDeviceArray{F, 5, 1}, 
-        i::I, k::I, i_fwd::I, k_fwd::I, mu::I, c::I, sc_buffA::CuDeviceArray{F, 4, 1}, vec_buffer_comp::CuDeviceArray{F, 6, 1}
+    @inline function cmplx_G1_func!(z::CuDeviceArray{F, 6, 1}, M::CuDeviceArray{F, 7, 1}, G1::CuDeviceArray{F, 5, 1}, 
+        i::I, k::I, i_fwd::I, k_fwd::I, mu::I, c::I, vec_buffer_comp::CuDeviceArray{F, 6, 1}
     )   
         
         mult_z_by_Mconj!(z, M, vec_buffer_comp, i, k, i, k, i, k, mu, c)
         cmplx_scalar_prod!(z, vec_buffer_comp, G1, i_fwd, k_fwd, i, k, i, k, c)
-        
-        idx_N = n_comps + I(1) 
-        @inbounds prod_nu_fwd = nu_vac[I(1), i_fwd, k_fwd, idx_N] * nu_vac[I(1), i, k, idx_N] 
-        @inbounds MconjRe = M[I(1), I(1), i, k, mu, idx_N, c]
-        @inbounds MconjIm = -M[I(2), I(1), i, k, mu, idx_N, c]
-        
-        mult_sc_diffsites!(root, root, sc_buffA, i, k, i_fwd, k_fwd, i, k, c)
-        for j::I = 1:n_ptords 
-            @inbounds G1[I(1), j, i, k, c] += prod_nu_fwd * MconjRe * sc_buffA[j, i, k, c]
-            @inbounds G1[I(2), j, i, k, c] += prod_nu_fwd * MconjIm * sc_buffA[j, i, k, c]
-        end 
-
          
         return 
-    end 
+    end
 
     function ener_kernel!(
         z::CuDeviceArray{F, 6, 1}, 
         U_mu::CuDeviceArray{F, 6, 1}, 
         ener::CuDeviceArray{F, 4, 1}, 
-        root_zscaled2::CuDeviceArray{F, 4, 1}, 
         M1::CuDeviceArray{F, 7, 1}, 
-        nu_vacuum::CuDeviceArray{F, 4, 1}, 
         c_sc_buffA::CuDeviceArray{F, 5, 1},
-        sc_buffA::CuDeviceArray{F, 4, 1}, 
         vec_buffer_comp::CuDeviceArray{F, 6, 1}
     )
 
@@ -600,7 +360,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx # Mi muovo avanti in quella spaziale 
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffA, i, k, i_fwd, k_fwd, mu, c, sc_buffA, vec_buffer_comp)
+                cmplx_G1_func!(z, M1, c_sc_buffA, i, k, i_fwd, k_fwd, mu, c, vec_buffer_comp)
                 
                 @inbounds Uconj_mu_Re = U_mu[I(1), I(1), i, k, mu, c]
                 @inbounds Uconj_mu_Im = -U_mu[I(2), I(1), i, k, mu, c]
@@ -624,21 +384,60 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
+    # Nuova funzione per il gradiente--> Ho tenuto semplicemente il primo pezzo di quella vecchia 
+    # Devo solo stare attento perché ora n_comps = N e non più N_comps = N-1 !!! 
+    # Funzione che calcola grad_z_// = grad_z - (nu_bar,grad_z)*nu_bar
+    @inline function parallel_component!(
+        cmplx_vec::CuDeviceArray{F, 6, 1},
+        z::CuDeviceArray{F, 6, 1},
+        c_sc_buffA::CuDeviceArray{F, 5, 1}, 
+        vec_buffer_comp::CuDeviceArray{F, 6, 1}, 
+        i::I, k::I, c::I
+    )
+
+        for j::I = 1:n_ptords 
+            @inbounds c_sc_buffA[I(1), j, i, k, c] = zero(F)
+            @inbounds c_sc_buffA[I(2), j, i, k, c] = zero(F)
+
+            for n::I = 1:n_comps
+                @inbounds nu_real = z[I(1), I(1), i, k, n, c]
+                @inbounds nu_imm = z[I(2), I(1), i, k, n, c]
+                @inbounds vec_real = cmplx_vec[I(1), j-l+I(1), i, k, n, c]
+                @inbounds vec_imm = cmplx_vec[I(2), j-l+I(1), i, k, n, c]
+
+                @inbounds c_sc_buffA[I(1),j,i,k,c] += nu_real * vec_real + nu_imm * vec_imm
+                @inbounds c_sc_buffA[I(2),j,i,k,c] += nu_real * vec_imm - nu_imm * vec_real 
+            end 
+        end 
+
+        for j::I = 1:n_ptords 
+            for n::I = 1:n_comps
+                @inbounds nu_real = z[I(1), I(1), i, k, n, c]
+                @inbounds nu_imm = z[I(2), I(1), i, k, n, c]
+                @inbounds scal_re = c_sc_buffA[I(1), j, i, k, c]
+                @inbounds scal_im = c_sc_buffA[I(2), j, i, k, c]
+
+                @inbounds vec_buffer_comp[I(1), j, i, k, n, c] = nu_real * scal_re - nu_imm * scal_im
+                @inbounds vec_buffer_comp[I(2), j, i, k, n, c] = nu_imm * scal_re + nu_real * scal_im
+
+                @inbounds cmplx_vec[I(1), j, i, k, n, c] -= vec_buffer_comp[I(1), j, i, k, n, c]
+                @inbounds cmplx_vec[I(2), j, i, k, n, c] -= vec_buffer_comp[I(2), j, i, k, n, c]
+            end 
+        end 
+        return 
+    end
+
+
     function grad_z_kernel!(
         z::CuDeviceArray{F, 6, 1}, 
-        nu_vacuum::CuDeviceArray{F, 4, 1},
         U_mu::CuDeviceArray{F, 6, 1}, 
         gradient_z::CuDeviceArray{F, 6, 1}, 
-        root_zscaled2::CuDeviceArray{F, 4, 1},
-        invroot_zscaled2::CuDeviceArray{F, 4, 1},
         M1::CuDeviceArray{F, 7, 1}, 
         vec_buffer_comp::CuDeviceArray{F, 6, 1}, 
-        c_sc_buffA::CuDeviceArray{F, 5, 1}, 
-        c_sc_buffB::CuDeviceArray{F, 5, 1}, 
-        sc_buffA::CuDeviceArray{F, 4, 1}
+        c_sc_buffA::CuDeviceArray{F, 5, 1}
     )
         
-        # Computes -grad_z ( visto che è quello che mi serve per Langevin)
+        # Computes the parallel component of -grad_z ( visto che è quello che mi serve per Langevin)
         i, k, c = get_indexes()
 
         
@@ -676,25 +475,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                 mult_compvec_by_U!(vec_buffer_comp, U_mu, gradient_z, i, k, i, k, i, k, mu, c)
 
             end 
-
-            for mu::I = 1:2
-            
-                if mu == I(1)
-                    # Direzione 1 (es. Temporale: up/down)
-                    i_fwd, k_fwd = i_dw, k
-                    i_bwd, k_bwd = i_up, k
-                else
-                    # Direzione 2 (es. Spaziale: right/left)
-                    i_fwd, k_fwd = i, k_dx
-                    i_bwd, k_bwd = i, k_sx
-                end 
-                
-                
-                fwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_fwd, k_fwd, c, nu_vacuum, M1, mu, c_sc_buffA, c_sc_buffB, sc_buffA)
-                bwd_corrective_term!(root_zscaled2, invroot_zscaled2, z, U_mu, gradient_z, i, k, i_bwd, k_bwd, c, nu_vacuum, M1, mu, c_sc_buffA, c_sc_buffB, sc_buffA)
-            
-            
-            end 
+            parallel_component!(z, gradient_z, c_sc_buffA, vec_buffer_comp, i, k, c)
 
 
         end 
@@ -707,10 +488,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         U_mu::CuDeviceArray{F, 6, 1}, 
         z::CuDeviceArray{F, 6, 1}, 
         M1::CuDeviceArray{F, 7, 1}, 
-        root_zscaled2::CuDeviceArray{F, 4, 1},
-        nu_vacuum::CuDeviceArray{F, 4, 1}, 
         c_sc_buffB::CuDeviceArray{F, 5, 1}, 
-        sc_buffA::CuDeviceArray{F, 4, 1}, 
         vec_buffer_comp::CuDeviceArray{F, 6, 1}
     )
         # Calcola -gradient_U
@@ -730,7 +508,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                     # Direzione 2 (es. Spaziale: right/left)
                     i_fwd, k_fwd = i, k_dx
                 end 
-                cmplx_G1_func!(z, root_zscaled2, M1, nu_vacuum, c_sc_buffB, i, k, i_fwd, k_fwd, mu, c, sc_buffA, vec_buffer_comp)
+                cmplx_G1_func!(z, M1, c_sc_buffB, i, k, i_fwd, k_fwd, mu, c, vec_buffer_comp)
                 
                 for j::I=1:n_ptords 
                     @inbounds grad_U_mu[j, i, k, mu, c] = zero(F)
@@ -746,6 +524,54 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end 
          end 
 
+        return nothing 
+    end 
+
+    function correct_z_kernel!(
+        z::CuDeviceArray{F, 6, 1}, 
+        sc_buffA::CuDeviceArray{F, 4, 1},
+        vec_buffer_comp::CuDeviceArray{F, 6, 1}
+    )
+
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            
+            @inbounds sc_buffA[I(1),i,k,c] = zero(F)
+            for j::I = 2:n_ptords 
+                sc_buffA[j,i,k,c] = zero(F)
+                for n::I = 1:n_comps 
+                    @inbounds nu_real = z[I(1),I(1),i,k,n,c]
+                    @inbounds nu_imm = z[I(2),I(1),i,k,n,c]
+                    @inbounds z_real = z[I(1),j,i,k,n,c]
+                    @inbounds z_imm = z[I(2),j,i,k,n,c]
+
+                    @inbounds sc_buffA[j,i,k,c] -= nu_real * z_real + nu_imm * z_imm
+                end 
+
+                for l::I = 2:(j-1) 
+                    for n::I = 1:n_comps 
+                        @inbounds z_real = z[I(1),j,i,k,n,c]
+                        @inbounds z_imm = z[I(2),j-l+I(1),i,k,n,c]
+
+                        @inbounds sc_buffA[j,i,k,c] -= F(0.5) * (z_real * z_real + z_imm * z_imm)
+                    end 
+                end 
+            
+            end 
+            
+            for j::I = 1:n_ptords 
+                for n::I = 1:n_comps 
+                    @inbounds nu_real = z[I(1),I(1),i,k,n,c]
+                    @inbounds nu_imm = z[I(2),I(1),i,k,n,c]
+                    @inbounds alpha = sc_buffA[j,i,k,c]
+
+                    @inbounds z[I(1),j,i,k,n,c] += alpha * nu_real 
+                    @inbounds z[I(2),j,i,k,n,c] += alpha * nu_imm
+                end 
+            end 
+
+        end 
+        
         return nothing 
     end 
 

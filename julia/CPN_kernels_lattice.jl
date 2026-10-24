@@ -575,6 +575,22 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end 
 
+    function project_noise_kernel!(
+        noise::CuDeviceArray{F, 6, 1},
+        z::CuDeviceArray{F, 6, 1},
+        c_sc_buffA::CuDeviceArray{F, 5, 1}, 
+        vec_buffer_comp::CuDeviceArray{F, 6, 1}
+    )
+        i, k, c = get_indexes()
+        
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            # Applica la proiezione radiale al vettore di rumore corrente
+            parallel_component!(noise, z, c_sc_buffA, vec_buffer_comp, i, k, c)
+        end 
+        
+        return nothing
+    end
+
     function zeromode_z_kernel!(z::CuDeviceArray{F, 6, 1}, zero_modo_z::CuDeviceArray{F, 4, 1})
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
@@ -589,5 +605,5 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
-    return (zscaled2_kernel!, grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, roots_kernel!, ExpU_kernel!, zeromode_z_kernel!)
+    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, zeromode_z_kernel!)
 end

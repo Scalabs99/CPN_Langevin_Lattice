@@ -386,7 +386,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
 
     # Nuova funzione per il gradiente--> Ho tenuto semplicemente il primo pezzo di quella vecchia 
     # Devo solo stare attento perché ora n_comps = N e non più N_comps = N-1 !!! 
-    # Funzione che calcola grad_z_// = grad_z - (nu_bar,grad_z)*nu_bar
     @inline function parallel_component!(
         cmplx_vec::CuDeviceArray{F, 6, 1},
         z::CuDeviceArray{F, 6, 1},
@@ -424,6 +423,27 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                 @inbounds cmplx_vec[I(2), j, i, k, n, c] -= vec_buffer_comp[I(2), j, i, k, n, c]
             end 
         end 
+        return 
+    end
+
+    @inline function gradient_projection!(
+        grad_vec::CuDeviceArray{F, 6, 1},
+        z::CuDeviceArray{F, 6, 1},
+        c_sc_buffA::CuDeviceArray{F, 5, 1}, 
+        vec_buffer_comp::CuDeviceArray{F, 6, 1}, 
+        i::I, k::I, c::I
+    )
+
+        cmplx_scalar_prod!(z, grad_vec, c_sc_buffA, i, k, i, k, i, k, c)
+        mult_complvec_by_complscal!(z, c_sc_buffA, vec_buffer_comp, i, k, i, k, i, k, c)
+
+        for j::I = 1:n_ptords 
+            for n::I = 1:n_comps 
+                @inbounds grad_vec[I(1),j,i,k,n,c] -= vec_buffer_comp[I(1),j,i,k,n,c]
+                @inbounds grad_vec[I(2),j,i,k,n,c] -= vec_buffer_comp[I(2),j,i,k,n,c]
+            end 
+        end 
+        
         return 
     end
 
@@ -475,7 +495,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                 mult_compvec_by_U!(vec_buffer_comp, U_mu, gradient_z, i, k, i, k, i, k, mu, c)
 
             end 
-            parallel_component!(gradient_z, z, c_sc_buffA, vec_buffer_comp, i, k, c)
+
+
+            gradient_projection!(gradient_z, z, c_sc_buffA, vec_buffer_comp, i, k, c)
 
 
         end 

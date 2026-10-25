@@ -417,7 +417,7 @@ function resume_main_Lang(checkpt_fname::String)
     floatType = typeof(conf.dt)
     n_ords = conf.max_ptord + one(conf.max_ptord)
     
-    nu_cpu, U_vac_cpu = load_C_config(floatType, conf.vac_fname, conf.Npoint, N_colors)
+    nu_cpu, U_vac_cpu = load_C_config(floatType, conf.vac_fname, conf.Npoint, conf.n_comps)
     nu_vacuum = CuArray(floatType.(nu_cpu))
     U_vacuum = CuArray(floatType.(U_vac_cpu))
     

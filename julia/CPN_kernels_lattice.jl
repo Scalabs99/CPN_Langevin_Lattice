@@ -402,8 +402,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             for n::I = 1:n_comps
                 @inbounds nu_real = z[I(1), I(1), i, k, n, c]
                 @inbounds nu_imm = z[I(2), I(1), i, k, n, c]
-                @inbounds vec_real = cmplx_vec[I(1), j-l+I(1), i, k, n, c]
-                @inbounds vec_imm = cmplx_vec[I(2), j-l+I(1), i, k, n, c]
+                @inbounds vec_real = cmplx_vec[I(1), j, i, k, n, c]
+                @inbounds vec_imm = cmplx_vec[I(2), j, i, k, n, c]
 
                 @inbounds c_sc_buffA[I(1),j,i,k,c] += nu_real * vec_real + nu_imm * vec_imm
                 @inbounds c_sc_buffA[I(2),j,i,k,c] += nu_real * vec_imm - nu_imm * vec_real 

@@ -227,7 +227,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
 
             
             for mu::I = 1:2 # 1 è la direzione temporale, 2 è la direzione spaziale. 
-                for n::I = 1:N_colors
+                for n::I = 1:n_comps
                     for j::I = 1:n_ptords
                         @inbounds M1[I(1), j, i, k, mu, n, c] = zero(F)
                         @inbounds M1[I(2), j, i, k, mu, n, c] = zero(F)
@@ -236,9 +236,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end
             
             for mu::I = 1:2
-                for n::I = 1:N_colors
+                for n::I = 1:n_comps
                     # Calcolo della fase: in Julia n va da 1 a N_colors, nel C era k da 0 a N-1
-                    phase = F(2.0 * pi * (n - 1) / N_colors)
+                    phase = F(2.0 * pi * (n - 1) / n_comps)
                     re_phase = cos(phase)
                     im_phase = sin(phase)
                     

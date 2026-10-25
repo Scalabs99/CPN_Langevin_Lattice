@@ -475,7 +475,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                 mult_compvec_by_U!(vec_buffer_comp, U_mu, gradient_z, i, k, i, k, i, k, mu, c)
 
             end 
-            parallel_component!(z, gradient_z, c_sc_buffA, vec_buffer_comp, i, k, c)
+            parallel_component!(gradient_z, z, c_sc_buffA, vec_buffer_comp, i, k, c)
 
 
         end 

@@ -434,6 +434,12 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         i::I, k::I, c::I
     )
 
+        for j::I = 1:n_ptords 
+            for n::I = 1:n_comps 
+                @inbounds vec_buffer_comp[I(1),j,i,k,n,c] = zero(F)
+                @inbounds vec_buffer_comp[I(2),j,i,k,n,c] = zero(F)
+            end 
+        end 
         cmplx_scalar_prod!(z, grad_vec, c_sc_buffA, i, k, i, k, i, k, c)
         mult_complvec_by_complscal!(z, c_sc_buffA, vec_buffer_comp, i, k, i, k, i, k, c)
 

@@ -52,6 +52,7 @@ function Euler_step_U!(
     grad_U::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
+    noise_X::CuArray{F, 5},
     ExpU_Eu_ker::CompiledKernel,
     n_comps::I, 
     Npoint2::I
@@ -97,6 +98,7 @@ function RK_evolution_U!(
     gradU::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
+    noise_X::CuArray{F, 5},
     ExpU_ker::CompiledKernel,
     n_comps::I,
     Npoint2::I
@@ -197,6 +199,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradU_Eu = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     Exp_buffer = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_copies)
     noise_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
+    noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
     zero_modo_z = CUDA.zeros(I(2), n_ords, n_comps, n_copies)
 
@@ -260,6 +263,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         for _ in 1:measure_every
             # Genera nuovo rumore gaussiano 
             reset_noise_z!(noise_z, cuda_rng)
+            reset_noise_X!(noise_X, cuda_rng)
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
             @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,1:1,:], dims=(3, 4)) ./ Npoint2
@@ -272,13 +276,13 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             compute_gradients!(gradker_z, gradker_U)
 
             # Fai gli step di Eulero per i due campi 
-            Euler_step_U!(U_Eu, U, gradient_U, dt, X, ExpU_Eu_ker, n_comps, Npoint2)
+            Euler_step_U!(U_Eu, U, gradient_U, dt, X, noise_X, ExpU_Eu_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
             run_kernel(zEu_coor_ker)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu)
-            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, ExpU_ker, n_comps, Npoint2)
+            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, noise_X, ExpU_ker, n_comps, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , n_comps)
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)

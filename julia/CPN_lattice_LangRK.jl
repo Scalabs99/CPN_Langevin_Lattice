@@ -270,15 +270,6 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U)
-            slice_cpu = Array(zscaled2[2, :, :, :])
-            max_val, max_idx = findmax(abs.(slice_cpu))
-
-            # max_idx sarà un CartesianIndex(x, y). Lo formattiamo per comodità:
-            x_max, y_max = max_idx[1], max_idx[2]
-
-            # Calcola il massimo valore assoluto
-            println("Step Langevin $t, Ordine 3 - Max zscaled2: $max_val")
-            println("Step $t - Max: $max_val al sito spaziale (x: $x_max, y: $y_max)")
 
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, ExpU_Eu_ker, N_colors, Npoint2)

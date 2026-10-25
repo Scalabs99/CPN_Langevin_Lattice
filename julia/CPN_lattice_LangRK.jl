@@ -34,13 +34,13 @@ function Euler_step_z!(
     noise_z::CuArray{F, 6}, 
     gradz::CuArray{F, 6},
     dt::F,
-    N_colors::I
+    n_comps::I
    
 ) where {F <: AbstractFloat, I <:Integer}
     
 
     z_Eu .= z
-    z_Eu .+= (N_colors * dt .* gradz) .+ (sqrt(dt) .* noise_z) # Var(noise) = Var(Re(noise)) + Var(Im(noise)) --> non serve il fattore radice di 2!!!
+    z_Eu .+= (n_comps * dt .* gradz) .+ (sqrt(dt) .* noise_z) # Var(noise) = Var(Re(noise)) + Var(Im(noise)) --> non serve il fattore radice di 2!!!
     @views z_Eu[:, 1, :, :, :, :] .= z[:, 1, :, :, :, :] #Cancella il rumore di macchina 
 
     return nothing 
@@ -53,7 +53,7 @@ function Euler_step_U!(
     dt::F, 
     X::CuArray{F, 5}, 
     ExpU_Eu_ker::CompiledKernel,
-    N_colors::I, 
+    n_comps::I, 
     Npoint2::I
 ) where {F <: AbstractFloat, I <: Integer}
 
@@ -63,7 +63,7 @@ function Euler_step_U!(
     @views X[1, :, :, :, :] .= zero(F) # BLINDA IL BACKGROUND: nessuna fase aggiuntiva!
     
     # Aggiorna solo le fluttuazioni -> il rumore l'ho già messo a zero in tutte le componenti fuorchè al primo ordine 
-    @inbounds @views X[2:end, :, :, :, :] .= ((F(N_colors) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
+    @inbounds @views X[2:end, :, :, :, :] .= ((F(n_comps) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
  
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -80,12 +80,12 @@ function RK_evolution_z!(
     gradz_Eu::CuArray{F, 6},
     dt::F,
     grad_z::CuArray{F, 6},
-    N_colors::I
+    n_comps::I
 ) where {F <: AbstractFloat, I <: Integer}
     # esegue l'evoluzione di uno step secondo l'algoritmo RK del secondo ordine
     # per l'equazione di Langevin 
     
-    @inbounds @views z[:,2:end,:,:,:,:] .+= (F(N_colors) * F(0.5) * dt) .* (grad_z[:,2:end,:,:,:,:] .+ gradz_Eu[:,2:end,:,:,:,:]) .+ (sqrt(dt) .* noise_z[:,2:end,:,:,:,:])
+    @inbounds @views z[:,2:end,:,:,:,:] .+= (F(n_comps) * F(0.5) * dt) .* (grad_z[:,2:end,:,:,:,:] .+ gradz_Eu[:,2:end,:,:,:,:]) .+ (sqrt(dt) .* noise_z[:,2:end,:,:,:,:])
     
     return nothing
 end
@@ -98,7 +98,7 @@ function RK_evolution_U!(
     dt::F, 
     X::CuArray{F, 5}, 
     ExpU_ker::CompiledKernel,
-    N_colors::I, 
+    n_comps::I,
     Npoint2::I
 
 ) where {F <: AbstractFloat, I <: Integer}
@@ -107,7 +107,7 @@ function RK_evolution_U!(
     @inbounds @views X[1, :, :, :, :] .= zero(F) # BLINDA IL BACKGROUND: nessuna fase aggiuntiva!
 
     # Aggiorna solo le fluttuazioni -> il rumore l'ho già messo a zero in tutte le componenti fuorchè al primo ordine 
-    @inbounds @views X[2:end,:,:,:,:] .= (F(N_colors) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
+    @inbounds @views X[2:end,:,:,:,:] .= (F(n_comps) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
 
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
@@ -272,14 +272,14 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             compute_gradients!(gradker_z, gradker_U)
 
             # Fai gli step di Eulero per i due campi 
-            Euler_step_U!(U_Eu, U, gradient_U, dt, X, ExpU_Eu_ker, N_colors, Npoint2)
-            Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, N_colors)
+            Euler_step_U!(U_Eu, U, gradient_U, dt, X, ExpU_Eu_ker, n_comps, Npoint2)
+            Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
             run_kernel(zEu_coor_ker)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu)
-            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, ExpU_ker, N_colors, Npoint2)
-            RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
+            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, ExpU_ker, n_comps, Npoint2)
+            RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , n_comps)
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting

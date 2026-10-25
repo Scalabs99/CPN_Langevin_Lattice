@@ -550,10 +550,12 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
 
                 for l::I = 2:(j-1) 
                     for n::I = 1:n_comps 
-                        @inbounds z_real = z[I(1),j,i,k,n,c]
-                        @inbounds z_imm = z[I(2),j-l+I(1),i,k,n,c]
+                        @inbounds z1_real = z[I(1),l,i,k,n,c]
+                        @inbounds z1_imm = z[I(2),l,i,k,n,c]
+                        @inbounds z2_real = z[I(1),j-l+I(1),i,k,n,c]
+                        @inbounds z2_imm = z[I(2),j-l+I(1),i,k,n,c]
 
-                        @inbounds sc_buffA[j,i,k,c] -= F(0.5) * (z_real * z_real + z_imm * z_imm)
+                        @inbounds sc_buffA[j,i,k,c] -= F(0.5) * (z1_real * z2_real + z1_imm * z2_imm)
                     end 
                 end 
             

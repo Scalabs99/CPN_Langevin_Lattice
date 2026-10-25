@@ -85,16 +85,16 @@ function save_matlab_energy(lat_fname::String, lat)
     return
 end
 
-function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) where{F <: AbstractFloat, I <: Integer}
-    nu_cpu = zeros(F, 2, Npoint, Npoint, N_colors)
+function load_C_config(::Type{F}, vac_fname::String, Npoint::I, n_comps::I) where{F <: AbstractFloat, I <: Integer}
+    nu_cpu = zeros(F, 2, Npoint, Npoint, n_comps)
     U_cpu  = zeros(F, 2, Npoint, Npoint, 2)
 
     if vac_fname == ""
         println(current_time(), "[INFO]: Nessun file del vuoto specificato. Inizializzazione al vuoto banale.")
         
-        nu_cpu[1, :, :, N_colors] .= F(1)
+        nu_cpu[1, :, :, n_comps] .= F(1)
         U_cpu[1, :, :, :] .= F(1)
-        phase = F(2.0 * pi * (N_colors - 1) / N_colors)
+        phase = F(2.0 * pi * (n_comps - 1) / n_comps)
         
         U_cpu[1, Npoint, :, 1] .= F(cos(phase))
         U_cpu[2, Npoint, :, 1] .= F(-sin(phase))
@@ -114,7 +114,7 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
         stored_Lt = parse(Int, tokens[3])
         stored_Lx = parse(Int, tokens[4])
         
-        if stored_N != N_colors || stored_Lt != Npoint || stored_Lx != Npoint
+        if stored_N != n_comps || stored_Lt != Npoint || stored_Lx != Npoint
             error("Dimensioni incompatibili! File: N=$stored_N, Lt=$stored_Lt, Lx=$stored_Lx")
         end
         
@@ -122,7 +122,7 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
             for t in 1:Npoint
                 
                 # Legge e inverte i byte (Big-Endian -> Native) per ogni colore
-                for c in 1:N_colors
+                for c in 1:n_comps
                     nu_cpu[1, t, x, c] = F(ntoh(read(f, Float64)))
                     nu_cpu[2, t, x, c] = F(ntoh(read(f, Float64)))
                 end

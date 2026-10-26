@@ -621,6 +621,146 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
+    # Calcola la trasformazione di gauge nel gauge di backgrounds 
+    # Ebar * E = 1 fissa la parte reale ( fai il conto con lo sviluppo perturbativo)
+    # Im(v_bar_N * z_N') = 0 !! ( dove z_N' è il trasformato di gauge per l'N-esima componente del vettore z sviluppato e con 
+    # |z(x)|^2 = 1)
+    function compute_gauge_transform_kernel!(
+        z::CuDeviceArray{F, 6, 1},
+        E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo
+    )
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            # All'ordine 0, la trasformazione è l'identità (non tocchiamo il vuoto)
+            @inbounds E_field[I(1), I(1), i, k, c] = one(F)
+            @inbounds E_field[I(2), I(1), i, k, c] = zero(F)
+            
+            # Leggiamo il background classico (ordine 1 nell'array)
+            @inbounds nu_N_re = z[I(1), I(1), i, k, n_comps, c]
+            @inbounds nu_N_im = z[I(2), I(1), i, k, n_comps, c]
+            nu_N_sq = nu_N_re^2 + nu_N_im^2
+            
+            # Costruiamo E ricorsivamente ordine per ordine
+            for j::I = 2:n_ptords
+                # 1. Condizione di unitarità (fissa la parte reale di E)
+                S_val = zero(F)
+                for l::I = 2:(j-1)
+                    @inbounds E1_re = E_field[I(1), l, i, k, c]
+                    @inbounds E1_im = E_field[I(2), l, i, k, c]
+                    @inbounds E2_re = E_field[I(1), j-l+I(1), i, k, c]
+                    @inbounds E2_im = -E_field[I(2), j-l+I(1), i, k, c] # complesso coniugato
+                    S_val += E1_re * E2_re - E1_im * E2_im
+                end
+                @inbounds E_field[I(1), j, i, k, c] = -F(0.5) * S_val # Fai i conti con gli sviluppi !! 
+                
+                # 2. Condizione di Gauge Cooling (fissa la parte immaginaria di E)
+                K_re = zero(F)
+                K_im = zero(F)
+                for l::I = 1:(j-1)
+                    @inbounds El_re = E_field[I(1), l, i, k, c]
+                    @inbounds El_im = E_field[I(2), l, i, k, c]
+                    @inbounds z_re = z[I(1), j-l+I(1), i, k, n_comps, c]
+                    @inbounds z_im = z[I(2), j-l+I(1), i, k, n_comps, c]
+                    
+                    K_re += El_re * z_re - El_im * z_im # K è il pezzo del prodotto che non dipende dal E^(j)
+                    K_im += El_im * z_re + El_re * z_im
+                end
+                
+                im_part = nu_N_re * K_im - nu_N_im * K_re
+                @inbounds E_field[I(2), j, i, k, c] = - im_part / nu_N_sq
+            end
+        end
+        return nothing
+    end
+
+    function apply_gauge_transform_kernel!(
+        z::CuDeviceArray{F, 6, 1},
+        U_mu::CuDeviceArray{F, 6, 1},
+        E_field::CuDeviceArray{F, 5, 1},
+        vec_buffer_comp::CuDeviceArray{F, 6, 1} 
+    )
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            
+            i_dx, k_dx = neighbour_right(i, k) 
+            i_dw, k_dw = neighbour_down(i, k) 
+            
+            # 1. Ruota z(x) -> E(x) * z(x)
+            for n::I = 1:n_comps
+                for j::I = 1:n_ptords
+                    res_re = zero(F)
+                    res_im = zero(F)
+                    for l::I = 1:j
+                        @inbounds E_re = E_field[I(1), l, i, k, c]
+                        @inbounds E_im = E_field[I(2), l, i, k, c]
+                        @inbounds z_re = z[I(1), j-l+I(1), i, k, n, c]
+                        @inbounds z_im = z[I(2), j-l+I(1), i, k, n, c]
+                        res_re += E_re * z_re - E_im * z_im
+                        res_im += E_im * z_re + E_re * z_im
+                    end
+                    @inbounds vec_buffer_comp[I(1), j, i, k, n, c] = res_re
+                    @inbounds vec_buffer_comp[I(2), j, i, k, n, c] = res_im
+                end
+            end
+            
+            for n::I = 1:n_comps
+                for j::I = 1:n_ptords
+                    @inbounds z[I(1), j, i, k, n, c] = vec_buffer_comp[I(1), j, i, k, n, c]
+                    @inbounds z[I(2), j, i, k, n, c] = vec_buffer_comp[I(2), j, i, k, n, c]
+                end
+            end
+            
+            # 2. Ruota i link U_mu(x) -> E(x) * U_mu(x) * conj(E(x+mu))
+            for mu::I = 1:2
+                if mu == I(1)
+                    i_fwd, k_fwd = i_dw, k
+                else
+                    i_fwd, k_fwd = i, k_dx
+                end
+                
+                # Passo A: T = E(x) * U_mu
+                for j::I = 1:n_ptords
+                    T_re = zero(F)
+                    T_im = zero(F)
+                    for l::I = 1:j
+                        @inbounds E_re = E_field[I(1), l, i, k, c]
+                        @inbounds E_im = E_field[I(2), l, i, k, c]
+                        @inbounds U_re = U_mu[I(1), j-l+I(1), i, k, mu, c]
+                        @inbounds U_im = U_mu[I(2), j-l+I(1), i, k, mu, c]
+                        T_re += E_re * U_re - E_im * U_im
+                        T_im += E_im * U_re + E_re * U_im
+                    end
+                    @inbounds vec_buffer_comp[I(1), j, i, k, mu, c] = T_re
+                    @inbounds vec_buffer_comp[I(2), j, i, k, mu, c] = T_im
+                end
+                
+                # Passo B: U_new = T * conj(E(x+mu))
+                for j::I = 1:n_ptords
+                    res_re = zero(F)
+                    res_im = zero(F)
+                    for l::I = 1:j
+                        @inbounds T_re = vec_buffer_comp[I(1), l, i, k, mu, c]
+                        @inbounds T_im = vec_buffer_comp[I(2), l, i, k, mu, c]
+                        @inbounds Ef_re = E_field[I(1), j-l+I(1), i_fwd, k_fwd, c]
+                        @inbounds Ef_im = -E_field[I(2), j-l+I(1), i_fwd, k_fwd, c] # coniugato!
+                        res_re += T_re * Ef_re - T_im * Ef_im
+                        res_im += T_im * Ef_re + T_re * Ef_im
+                    end
+                    # Salviamo in una zona sicura del buffer temporaneo
+                    @inbounds vec_buffer_comp[I(1), j, i, k, mu+2, c] = res_re
+                    @inbounds vec_buffer_comp[I(2), j, i, k, mu+2, c] = res_im
+                end
+                
+                # Scriviamo definitivamente in U_mu
+                for j::I = 1:n_ptords
+                    @inbounds U_mu[I(1), j, i, k, mu, c] = vec_buffer_comp[I(1), j, i, k, mu+2, c]
+                    @inbounds U_mu[I(2), j, i, k, mu, c] = vec_buffer_comp[I(2), j, i, k, mu+2, c]
+                end
+            end
+        end
+        return nothing
+    end
+
     function zeromode_z_kernel!(z::CuDeviceArray{F, 6, 1}, zero_modo_z::CuDeviceArray{F, 4, 1})
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)

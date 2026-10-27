@@ -269,10 +269,10 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
             @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,1:1,:], dims=(3, 4)) ./ Npoint2
-            #noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
+            @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
             @views noise_z[:,2:2,:,:,1:1,:] .-= noise_mean_z
+            @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
             run_kernel(noise_ker)
-            #@inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X # Non serve il CUDA.@sync in queste righe 
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U)

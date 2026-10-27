@@ -115,7 +115,7 @@ function RK_evolution_U!(
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
     compute_exponential!(ExpU_ker)
 
-    U .= U_temp
+    @inbounds @views U[:,2:end,:,:,:,:] .= U_temp[:,2:end,:,:,:,:]
     
     return nothing 
 end 
@@ -226,7 +226,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     end
     
     # creazione delle funzioni a parametri fissati
-    f_grad_z, f_grad_U, f_ener, f_twist, f_corr_z, f_proj_noise, f_exp, f_zeromode = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
+    f_grad_z, f_grad_U, f_ener, f_twist, f_corr_z, f_proj_noise, f_exp, f_gauge, f_apply_gauge, f_zeromode = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
 
     # compilazione dei kernel e creazione di struct con i kernel compilati
 
@@ -236,6 +236,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradker_U = compile_kernel(f_grad_U, (gradient_U, U, z, M1, c_sc_buffB, vec_buffer_comp), Npoint2, n_copies)
     ExpU_ker = compile_kernel(f_exp, (X, Exp_buffer, U, U_temp, sc_buffA, sc_buffB), Npoint2, n_copies)
     z_corr_ker = compile_kernel(f_corr_z, (z, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
+    gauge_ker = compile_kernel(f_gauge, (z, c_sc_buffA), Npoint2, n_copies)
+    apply_gauge_ker = compile_kernel(f_apply_gauge, (z, U, c_sc_buffA, vec_buffer_comp, U_temp), Npoint2, n_copies)
         
     gradker_z_Eu = compile_kernel(f_grad_z, (z_Eu, U_Eu, gradz_Eu, M1, vec_buffer_comp, c_sc_buffA), Npoint2, n_copies)
     gradker_U_Eu = compile_kernel(f_grad_U, (gradU_Eu, U_Eu, z_Eu, M1, c_sc_buffB, vec_buffer_comp), Npoint2, n_copies)
@@ -294,6 +296,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
+            run_kernel(gauge_ker)
+            run_kernel(apply_gauge_ker)
 
             if t <= 3
                 println("[DIAGNOSTICA] Salvataggio del tensore z per lo step $t...")

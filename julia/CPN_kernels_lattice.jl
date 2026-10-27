@@ -627,7 +627,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
     # |z(x)|^2 = 1)
     function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
-        E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo
+        E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo ?? 
     )
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
@@ -677,7 +677,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         z::CuDeviceArray{F, 6, 1},
         U_mu::CuDeviceArray{F, 6, 1},
         E_field::CuDeviceArray{F, 5, 1},
-        vec_buffer_comp::CuDeviceArray{F, 6, 1} 
+        vec_buffer_comp::CuDeviceArray{F, 6, 1}, 
+        U_temp::CuDeviceArray{F, 6, 1}
     )
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
@@ -730,8 +731,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                         T_re += E_re * U_re - E_im * U_im
                         T_im += E_im * U_re + E_re * U_im
                     end
-                    @inbounds vec_buffer_comp[I(1), j, i, k, mu, c] = T_re
-                    @inbounds vec_buffer_comp[I(2), j, i, k, mu, c] = T_im
+                    @inbounds U_temp[I(1), j, i, k, mu, c] = T_re
+                    @inbounds U_temp[I(2), j, i, k, mu, c] = T_im
                 end
                 
                 # Passo B: U_new = T * conj(E(x+mu))
@@ -739,22 +740,22 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                     res_re = zero(F)
                     res_im = zero(F)
                     for l::I = 1:j
-                        @inbounds T_re = vec_buffer_comp[I(1), l, i, k, mu, c]
-                        @inbounds T_im = vec_buffer_comp[I(2), l, i, k, mu, c]
+                        @inbounds T_re = U_temp[I(1), l, i, k, mu, c]
+                        @inbounds T_im = U_temp[I(2), l, i, k, mu, c]
                         @inbounds Ef_re = E_field[I(1), j-l+I(1), i_fwd, k_fwd, c]
                         @inbounds Ef_im = -E_field[I(2), j-l+I(1), i_fwd, k_fwd, c] # coniugato!
                         res_re += T_re * Ef_re - T_im * Ef_im
                         res_im += T_im * Ef_re + T_re * Ef_im
                     end
                     # Salviamo in una zona sicura del buffer temporaneo
-                    @inbounds vec_buffer_comp[I(1), j, i, k, mu+2, c] = res_re
-                    @inbounds vec_buffer_comp[I(2), j, i, k, mu+2, c] = res_im
+                    @inbounds U_temp[I(1), j, i, k, I(3)-mu, c] = res_re
+                    @inbounds U_temp[I(2), j, i, k, I(3)-mu, c] = res_im
                 end
                 
                 # Scriviamo definitivamente in U_mu
                 for j::I = 1:n_ptords
-                    @inbounds U_mu[I(1), j, i, k, mu, c] = vec_buffer_comp[I(1), j, i, k, mu+2, c]
-                    @inbounds U_mu[I(2), j, i, k, mu, c] = vec_buffer_comp[I(2), j, i, k, mu+2, c]
+                    @inbounds U_mu[I(1), j, i, k, mu, c] = U_temp[I(1), j, i, k, I(3)-mu, c]
+                    @inbounds U_mu[I(2), j, i, k, mu, c] = U_temp[I(2), j, i, k, I(3)-mu, c]
                 end
             end
         end
@@ -775,5 +776,5 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
-    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, zeromode_z_kernel!)
+    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, zeromode_z_kernel!)
 end

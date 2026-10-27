@@ -277,6 +277,16 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U)
 
+            if t <= 3
+                # grad_U ha dimensioni: (n_ords, Npoint, Npoint, mu, copies)
+                # Calcoliamo la media per l'ordine 2 (il primo non banale) e mu=1,2 sulla copia 1
+                media_grad_U_mu1 = CUDA.sum(grad_U[2, :, :, 1, 1]) / Npoint2
+                media_grad_U_mu2 = CUDA.sum(grad_U[2, :, :, 2, 1]) / Npoint2
+                
+                println("Step $t | Media grad_U (Ord 2, mu=1): ", media_grad_U_mu1)
+                println("Step $t | Media grad_U (Ord 2, mu=2): ", media_grad_U_mu2)
+            end
+
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, noise_X, ExpU_Eu_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)

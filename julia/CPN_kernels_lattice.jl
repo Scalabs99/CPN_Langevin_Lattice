@@ -627,6 +627,59 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
     # |z(x)|^2 = 1)
     function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
+        E_field::CuDeviceArray{F, 5, 1} 
+    )
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            # All'ordine 0, la trasformazione è l'identità
+            @inbounds E_field[I(1), I(1), i, k, c] = one(F)
+            @inbounds E_field[I(2), I(1), i, k, c] = zero(F)
+            
+            # Costruiamo E ricorsivamente ordine per ordine
+            for j::I = 2:n_ptords
+                # 1. Condizione di unitarità (fissa la parte reale di E)
+                S_val = zero(F)
+                for l::I = 2:(j-1)
+                    @inbounds E1_re = E_field[I(1), l, i, k, c]
+                    @inbounds E1_im = E_field[I(2), l, i, k, c]
+                    @inbounds E2_re = E_field[I(1), j-l+I(1), i, k, c]
+                    @inbounds E2_im = -E_field[I(2), j-l+I(1), i, k, c] 
+                    S_val += E1_re * E2_re - E1_im * E2_im
+                end
+                @inbounds E_field[I(1), j, i, k, c] = -F(0.5) * S_val 
+                
+                # 2. Condizione di Gauge Cooling Covariante (SU TUTTO IL VETTORE)
+                im_part_total = zero(F)
+                
+                for n::I = 1:n_comps
+                    # Leggiamo il background per la componente n-esima
+                    @inbounds nu_re = z[I(1), I(1), i, k, n, c]
+                    @inbounds nu_im = z[I(2), I(1), i, k, n, c]
+                    
+                    K_re = zero(F)
+                    K_im = zero(F)
+                    for l::I = 1:(j-1)
+                        @inbounds El_re = E_field[I(1), l, i, k, c]
+                        @inbounds El_im = E_field[I(2), l, i, k, c]
+                        @inbounds z_re = z[I(1), j-l+I(1), i, k, n, c]
+                        @inbounds z_im = z[I(2), j-l+I(1), i, k, n, c]
+                        
+                        K_re += El_re * z_re - El_im * z_im 
+                        K_im += El_im * z_re + El_re * z_im
+                    end
+                    
+                    # Proiezione \bar{\nu}_n * K_n e accumulo della parte immaginaria
+                    im_part_total += nu_re * K_im - nu_im * K_re
+                end
+                
+                # Niente più divisione per nu_N_sq! La norma totale \sum |nu_n|^2 è 1
+                @inbounds E_field[I(2), j, i, k, c] = -im_part_total
+            end
+        end
+        return nothing
+    end
+    #=function compute_gauge_transform_kernel!(
+        z::CuDeviceArray{F, 6, 1},
         E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo ?? 
     )
         i, k, c = get_indexes()
@@ -671,7 +724,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end
         end
         return nothing
-    end
+    end=#
 
     function apply_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},

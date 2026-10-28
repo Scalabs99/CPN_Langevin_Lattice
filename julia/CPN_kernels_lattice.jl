@@ -615,7 +615,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         
         if (i <= Npoint && k <= Npoint && c <= n_copies)
             # Applica la proiezione radiale al vettore di rumore corrente
-            parallel_component!(noise, z, c_sc_buffA, vec_buffer_comp, i, k, c)
+            gradient_projection!(noise, z, c_sc_buffA, vec_buffer_comp, i, k, c)
         end 
         
         return nothing

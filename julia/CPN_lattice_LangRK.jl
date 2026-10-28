@@ -288,9 +288,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             reset_noise_X!(noise_X, cuda_rng)
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
-            @inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,1:1,:], dims=(3, 4)) ./ Npoint2
+            @inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
             @inbounds @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
-            @inbounds @views noise_z[:,2:2,:,:,1:1,:] .-= noise_mean_z
+            @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
             @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
             run_kernel(noise_ker)
 

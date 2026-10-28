@@ -302,8 +302,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
                 # Calcoliamo la media per l'ordine 2 (il primo non banale) e mu=1,2 sulla copia 1
                 @views media_grad_U_mu1 = CUDA.sum(gradient_U[2, :, :, 1, 1]) / Npoint2
                 @views media_grad_U_mu2 = CUDA.sum(gradient_U[2, :, :, 2, 1]) / Npoint2
-                @views media_grad_zRe = CUDA.sum(gradient_z[1, 2, :, :, 1, 1]) / Npoint2 
-                @views media_grad_zIm = CUDA.sum(gradient_z[2, 2, :, :, 1, 1]) / Npoint2
+                @views media_grad_zRe = CUDA.sum(gradient_z[1, 2, :, :, 5, 1]) / Npoint2 
+                @views media_grad_zIm = CUDA.sum(gradient_z[2, 2, :, :, 5, 1]) / Npoint2
                 println("Step $t | Media grad_U (Ord 2, mu=1): ", media_grad_U_mu1)
                 println("Step $t | Media grad_U (Ord 2, mu=2): ", media_grad_U_mu2)
                 println("Step $t | Media grad_zRe (Ord 2, n=1): ", media_grad_zRe)

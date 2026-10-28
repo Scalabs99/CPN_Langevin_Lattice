@@ -322,12 +322,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
-            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
 
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
-            CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+            CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
             run_kernel(gauge_ker)
             run_kernel(apply_gauge_ker)

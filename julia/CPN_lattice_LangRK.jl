@@ -52,8 +52,10 @@ function Euler_step_U!(
     grad_U::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
+    zero_modo_X::CuArray{F, 3},
     noise_X::CuArray{F, 5},
     ExpU_Eu_ker::CompiledKernel,
+    zero_X_ker::CompiledKernel,
     n_comps::I, 
     Npoint2::I
 ) where {F <: AbstractFloat, I <: Integer}
@@ -61,11 +63,18 @@ function Euler_step_U!(
     U_Eu .= U
 
     # Costruisci l'incremento X (Forza + Rumore)
-    @views X[1, :, :, :, :] .= zero(F) # BLINDA IL BACKGROUND: nessuna fase aggiuntiva!
+    @inbounds @views X[1, :, :, :, :] .= zero(F) # BLINDA IL BACKGROUND: nessuna fase aggiuntiva!
     
     # Aggiorna solo le fluttuazioni -> il rumore l'ho già messo a zero in tutte le componenti fuorchè al primo ordine 
     @inbounds @views X[2:end, :, :, :, :] .= ((F(n_comps) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
  
+    # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+
+    
+    # Lancia il kernel per togliere lo zero mode da X 
+    run_kernel(zero_X_ker) 
+
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
 
@@ -98,8 +107,10 @@ function RK_evolution_U!(
     gradU::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
+    zero_modo_X::CuArray{F, 3}, 
     noise_X::CuArray{F, 5},
     ExpU_ker::CompiledKernel,
+    zero_X_ker::CompiledKernel,
     n_comps::I,
     Npoint2::I
 
@@ -111,6 +122,12 @@ function RK_evolution_U!(
     # Aggiorna solo le fluttuazioni -> il rumore l'ho già messo a zero in tutte le componenti fuorchè al primo ordine 
     @inbounds @views X[2:end,:,:,:,:] .= (F(n_comps) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
 
+    # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    
+    # Lancia il kernel per togliere lo zero mode da X 
+    run_kernel(zero_X_ker)
+     
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
     compute_exponential!(ExpU_ker)
@@ -202,6 +219,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
     zero_modo_z = CUDA.zeros(I(2), n_ords, n_comps, n_copies)
+    zero_modo_X = CUDA.zeros(n_ords, I(2), n_copies) 
 
 
     energia = CUDA.zeros(F, n_ords, n_copies)
@@ -226,7 +244,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     end
     
     # creazione delle funzioni a parametri fissati
-    f_grad_z, f_grad_U, f_ener, f_twist, f_corr_z, f_proj_noise, f_exp, f_gauge, f_apply_gauge, f_zeromode = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
+    f_grad_z, f_grad_U, f_ener, f_twist, f_corr_z, f_proj_noise, f_exp, f_gauge, f_apply_gauge, f_zero_X = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
 
     # compilazione dei kernel e creazione di struct con i kernel compilati
 
@@ -243,6 +261,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradker_U_Eu = compile_kernel(f_grad_U, (gradU_Eu, U_Eu, z_Eu, M1, c_sc_buffB, vec_buffer_comp), Npoint2, n_copies)
     ExpU_Eu_ker = compile_kernel(f_exp, (X, Exp_buffer, U, U_Eu, sc_buffA, sc_buffB), Npoint2, n_copies)
     zEu_coor_ker = compile_kernel(f_corr_z, (z_Eu, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
+
+    zero_X_ker = compile_kernel(f_zero_X, (X, zero_modo_X), Npoint2, n_copies)
     
     noise_ker = compile_kernel(f_proj_noise, (noise_z, z, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
   
@@ -268,10 +288,10 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             reset_noise_X!(noise_X, cuda_rng)
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
-            @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,1:1,:], dims=(3, 4)) ./ Npoint2
-            @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
-            @views noise_z[:,2:2,:,:,1:1,:] .-= noise_mean_z
-            @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
+            @inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,1:1,:], dims=(3, 4)) ./ Npoint2
+            @inbounds @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
+            @inbounds @views noise_z[:,2:2,:,:,1:1,:] .-= noise_mean_z
+            @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
             run_kernel(noise_ker)
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici

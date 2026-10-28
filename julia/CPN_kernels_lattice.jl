@@ -815,7 +815,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
-    function zeromode_z_kernel!(z::CuDeviceArray{F, 6, 1}, zero_modo_z::CuDeviceArray{F, 4, 1})
+    #=function zeromode_z_kernel!(z::CuDeviceArray{F, 6, 1}, zero_modo_z::CuDeviceArray{F, 4, 1})
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
             for n::I = 1:n_comps
@@ -827,7 +827,19 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
            
         end
         return nothing
-    end
+    end=#
 
-    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, zeromode_z_kernel!)
+    function zeromode_X_kernel!(X::CuDeviceArray{F, 5, 1}, zero_modo_X::CuDeviceArray{F, 3, 1})
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            for mu::I = 1:2 
+                for j::I = 2:n_ptords
+                    @inbounds X[j,i,k,mu,c] -= zero_modo_X[j, mu, c]
+                end 
+            end 
+        end 
+        return nothing 
+    end 
+
+    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, zeromode_X_kernel!)
 end

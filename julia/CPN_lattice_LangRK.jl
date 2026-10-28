@@ -218,8 +218,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     noise_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
-    zero_modo_z = CUDA.zeros(I(2), n_ords, n_comps, n_copies)
-    zero_modo_X = CUDA.zeros(n_ords, I(2), n_copies) 
+    zero_modo_z = CUDA.zeros(F, I(2), n_ords, n_comps, n_copies)
+    zero_modo_X = CUDA.zeros(F, n_ords, I(2), n_copies) 
 
 
     energia = CUDA.zeros(F, n_ords, n_copies)
@@ -311,13 +311,13 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             end
 
             # Fai gli step di Eulero per i due campi 
-            Euler_step_U!(U_Eu, U, gradient_U, dt, X, noise_X, ExpU_Eu_ker, n_comps, Npoint2)
+            Euler_step_U!(U_Eu, U, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_Eu_ker, zero_X_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
             run_kernel(zEu_coor_ker)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu)
-            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, noise_X, ExpU_ker, n_comps, Npoint2)
+            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_ker, zero_X_ker, n_comps, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , n_comps)
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)

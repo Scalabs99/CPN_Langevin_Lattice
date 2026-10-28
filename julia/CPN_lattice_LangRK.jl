@@ -73,7 +73,7 @@ function Euler_step_U!(
 
     
     # Lancia il kernel per togliere lo zero mode da X 
-    run_kernel(zero_X_ker) 
+    #run_kernel(zero_X_ker) 
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -126,7 +126,7 @@ function RK_evolution_U!(
     CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
-    run_kernel(zero_X_ker)
+    #run_kernel(zero_X_ker)
      
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
@@ -327,7 +327,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
-            CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
+            #CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
             run_kernel(gauge_ker)
             run_kernel(apply_gauge_ker)

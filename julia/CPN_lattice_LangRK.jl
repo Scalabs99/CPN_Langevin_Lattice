@@ -58,7 +58,9 @@ function Euler_step_U!(
     noise_X::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
+    zero_modo_X::CuArray{F, 5},
     ExpU_Eu_ker::CompiledKernel,
+    zero_modeX_ker::CompiledKernel,
     N_colors::I, 
     Npoint2::I
 ) where {F <: AbstractFloat, I <: Integer}
@@ -111,7 +113,9 @@ function RK_evolution_U!(
     noise_X::CuArray{F, 5}, 
     dt::F, 
     X::CuArray{F, 5}, 
+    zero_modo_X::CuArray{F, 5},
     ExpU_ker::CompiledKernel,
+    zero_modeX_ker::CompiledKernel,
     N_colors::I, 
     Npoint2::I
 
@@ -315,12 +319,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             println("Step $t - Max: $max_val al sito spaziale (x: $x_max, y: $y_max)")
 
             # Fai gli step di Eulero per i due campi 
-            Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, ExpU_Eu_ker, N_colors, Npoint2)
+            Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_Eu_ker, zero_modeX_ker, N_colors, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, N_colors)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
-            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, noise_X, dt, X, ExpU_ker, N_colors, Npoint2)
+            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zeromode_X_kernel, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
 
             # 1. Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)

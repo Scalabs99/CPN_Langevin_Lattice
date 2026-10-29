@@ -227,6 +227,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     energia = CUDA.zeros(F, n_ords, n_copies)
     ener = CUDA.zeros(F, n_ords, Npoint, Npoint, n_copies)
 
+    z_meas = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies, n_meas)
+
     en_fnames = [en_fname]
     for i in 2:n_copies
         push!(en_fnames, get_copy_energy_filename(en_fname, i))

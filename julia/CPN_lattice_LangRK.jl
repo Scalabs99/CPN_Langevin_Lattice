@@ -70,6 +70,13 @@ function Euler_step_U!(
     
     # Aggiorna solo le fluttuazioni -> il rumore l'ho già messo a zero in tutte le componenti fuorchè al primo ordine 
     @inbounds @views X[2:end, :, :, :, :] .= ((F(N_colors) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
+
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    
+    # Lancia il kernel per togliere lo zero mode da X 
+
+    run_kernel(zero_modeX_ker)
+  
  
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -116,6 +123,11 @@ function RK_evolution_U!(
     # Aggiorna solo le fluttuazioni -> il rumore l'ho già messo a zero in tutte le componenti fuorchè al primo ordine 
     @inbounds @views X[2:end,:,:,:,:] .= (F(N_colors) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
 
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    
+    # Lancia il kernel per togliere lo zero mode da X 
+
+    run_kernel(zero_modeX_ker)
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
     compute_exponential!(ExpU_ker)
@@ -217,7 +229,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     noise_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), N_colors, n_copies)
-    zero_modo_z = CUDA.zeros(I(2), n_ords, n_comps, n_copies)
+    zero_modo_z = CUDA.zeros(F, I(2), n_ords, n_comps, n_copies)
+    zero_modo_X = CUDA.zeros(F, n_ords, I(2), n_copies)
 
 
     energia = CUDA.zeros(F, n_ords, n_copies)
@@ -242,7 +255,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     end
     
     # creazione delle funzioni a parametri fissati
-    f_z2, f_grad_z, f_grad_U, f_ener, f_twist, f_roots, f_exp, f_zeromode = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
+    f_z2, f_grad_z, f_grad_U, f_ener, f_twist, f_roots, f_exp, f_zeromode, fzeroX = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
 
     # compilazione dei kernel e creazione di struct con i kernel compilati
 
@@ -259,7 +272,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradker_z_Eu = compile_kernel(f_grad_z, (z_Eu, nu_vacuum, U_Eu, gradz_Eu, root_z2, invroot_z2, M1, vec_buffer_comp, c_sc_buffA, c_sc_buffB, sc_buffA), Npoint2, n_copies)
     gradker_U_Eu = compile_kernel(f_grad_U, (gradU_Eu, U_Eu, z_Eu, M1, root_z2, nu_vacuum, c_sc_buffB, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
     ExpU_Eu_ker = compile_kernel(f_exp, (X, Exp_buffer, U, U_Eu, sc_buffA, sc_buffB), Npoint2, n_copies)
-
+    
+    zero_modeX_ker = compile_kernel(fzeroX, (X, zero_modo_X))
   
     compute_ener_ker = compile_kernel(f_ener, (z, U, ener, root_z2, M1, nu_vacuum, c_sc_buffA, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
 

@@ -763,5 +763,17 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
-    return (zscaled2_kernel!, grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, roots_kernel!, ExpU_kernel!, zeromode_z_kernel!)
+    function zeromode_X_kernel!(X::CuDeviceArray{F, 5, 1}, zero_modo_X::CuDeviceArray{F, 3, 1})
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            for mu::I = 1:2 
+                for j::I = 2:n_ptords
+                    @inbounds X[j,i,k,mu,c] -= zero_modo_X[j, mu, c]
+                end 
+            end 
+        end 
+        return nothing 
+    end 
+
+    return (zscaled2_kernel!, grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, roots_kernel!, ExpU_kernel!, zeromode_z_kernel!, zeromode_X_kernel!)
 end

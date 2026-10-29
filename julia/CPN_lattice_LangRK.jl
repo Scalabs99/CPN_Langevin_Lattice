@@ -194,6 +194,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         lat_fname::String = args.lat_fname
         ener_meas::CuArray{F, 5} = args.ener_meas
     end
+
+    z_fname::String = "z_mat_file"
     
     n_ords = max_ptord + one(max_ptord)
     Npoint2 = Npoint^2
@@ -348,6 +350,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         if save_lattice
             @inbounds @views ener_meas[:,:,:,:,t] .= ener
         end
+
+        @inbounds @views z_meas[:,:,:,:,:,:,t] .= z
         
         for i in 1:n_copies
             @inbounds @views write_line(mean_energy_files[i], Array(energia[:, i]))
@@ -376,6 +380,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
     # Saving energy site-by-site on matlab file
     save_lattice && save_matlab_energy(lat_fname, Array(ener_meas))
+    save_matlab_energy(z_fname, Array(z_meas))
     println(current_time(), "All measurements successfully taken.")
     
     return

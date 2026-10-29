@@ -273,7 +273,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradker_U_Eu = compile_kernel(f_grad_U, (gradU_Eu, U_Eu, z_Eu, M1, root_z2, nu_vacuum, c_sc_buffB, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
     ExpU_Eu_ker = compile_kernel(f_exp, (X, Exp_buffer, U, U_Eu, sc_buffA, sc_buffB), Npoint2, n_copies)
     
-    zero_modeX_ker = compile_kernel(fzeroX, (X, zero_modo_X))
+    zero_modeX_ker = compile_kernel(fzeroX, (X, zero_modo_X), Npoint2, n_copies)
   
     compute_ener_ker = compile_kernel(f_ener, (z, U, ener, root_z2, M1, nu_vacuum, c_sc_buffA, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
 

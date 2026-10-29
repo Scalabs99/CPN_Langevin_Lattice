@@ -324,7 +324,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu, zscaled2_ker_Eu, roots_ker_Eu)
-            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zeromode_X_kernel, N_colors, Npoint2)
+            RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_ker, zero_modeX_ker, N_colors, Npoint2)
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
 
             # 1. Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)

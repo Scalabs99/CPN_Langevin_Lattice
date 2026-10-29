@@ -555,7 +555,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end 
 
-    function correct_z_kernel!(
+    #=function correct_z_kernel!(
         z::CuDeviceArray{F, 6, 1}, 
         sc_buffA::CuDeviceArray{F, 4, 1},
         vec_buffer_comp::CuDeviceArray{F, 6, 1}
@@ -603,7 +603,57 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         end 
         
         return nothing 
-    end 
+    end=#
+
+    function correct_z_kernel!(
+        z::CuDeviceArray{F, 6, 1}, 
+        sc_buffA::CuDeviceArray{F, 4, 1},
+        vec_buffer_comp::CuDeviceArray{F, 6, 1} # Questo buffer non serve più qui, ma lo teniamo per la firma
+    )
+
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            
+            # Iteriamo ordine per ordine
+            for j::I = 2:n_ptords 
+                alpha = zero(F)
+                
+                # 1. Termine lineare: -Re[nu_bar * z_tilde]
+                for n::I = 1:n_comps 
+                    @inbounds nu_real = z[I(1),I(1),i,k,n,c]
+                    @inbounds nu_imm = z[I(2),I(1),i,k,n,c]
+                    @inbounds z_real = z[I(1),j,i,k,n,c]
+                    @inbounds z_imm = z[I(2),j,i,k,n,c]
+
+                    alpha -= nu_real * z_real + nu_imm * z_imm
+                end 
+
+                # 2. Prodotti di Cauchy C_n / 2 usando i campi GIA' CORRETTI (l < j)
+                for l::I = 2:(j-1) 
+                    for n::I = 1:n_comps 
+                        @inbounds z1_real = z[I(1),l,i,k,n,c]
+                        @inbounds z1_imm = z[I(2),l,i,k,n,c]
+                        @inbounds z2_real = z[I(1),j-l+I(1),i,k,n,c]
+                        @inbounds z2_imm = z[I(2),j-l+I(1),i,k,n,c]
+
+                        alpha -= F(0.5) * (z1_real * z2_real + z1_imm * z2_imm)
+                    end 
+                end 
+                
+                # 3. AGGIORNAMENTO IMMEDIATO: Correggo z all'ordine j prima di passare al j+1
+                for n::I = 1:n_comps 
+                    @inbounds nu_real = z[I(1),I(1),i,k,n,c]
+                    @inbounds nu_imm = z[I(2),I(1),i,k,n,c]
+
+                    @inbounds z[I(1),j,i,k,n,c] += alpha * nu_real 
+                    @inbounds z[I(2),j,i,k,n,c] += alpha * nu_imm
+                end 
+            end 
+
+        end 
+        
+        return nothing 
+    end
 
     function project_noise_kernel!(
         noise::CuDeviceArray{F, 6, 1},

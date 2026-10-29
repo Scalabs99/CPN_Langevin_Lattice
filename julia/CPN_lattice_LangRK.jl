@@ -353,7 +353,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             @inbounds @views ener_meas[:,:,:,:,t] .= ener
         end
 
-        @inbounds @views z_meas[:,:,:,:,:,:,t] .= z
+        #@inbounds @views z_meas[:,:,:,:,:,:,t] .= z
         
         for i in 1:n_copies
             @inbounds @views write_line(mean_energy_files[i], Array(energia[:, i]))

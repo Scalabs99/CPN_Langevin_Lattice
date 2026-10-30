@@ -333,9 +333,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
-            #run_kernel(gauge_ker)
-            #run_kernel(apply_gauge_ker)
-            #run_kernel(z_corr_ker) # normalizza di nuovo! 
+            run_kernel(gauge_ker)
+            run_kernel(apply_gauge_ker)
+            run_kernel(z_corr_ker) # normalizza di nuovo! 
             if t <= 3
                 println("[DIAGNOSTICA] Salvataggio del tensore z per lo step $t...")
                 # Trasferisce l'array dalla GPU alla CPU con Array(z) e lo salva

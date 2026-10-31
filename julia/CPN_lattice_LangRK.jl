@@ -287,7 +287,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     zero_X_ker = compile_kernel(f_zero_X, (X, zero_modo_X), Npoint2, n_copies)
     
     noise_ker = compile_kernel(f_proj_noise, (noise_z, z, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
-    noise_ker_Eu = compile_kernel(f_proj_noise, (noise_z_Eu, z_Eu, c_sc_buffA, vec_buffer_comps), Npoint2, n_copies)
+    noise_ker_Eu = compile_kernel(f_proj_noise, (noise_z_Eu, z_Eu, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
   
     compute_ener_ker = compile_kernel(f_ener, (z, U, ener, M1, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
 

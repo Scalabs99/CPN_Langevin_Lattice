@@ -73,7 +73,7 @@ function Euler_step_U!(
 
     
     # Lancia il kernel per togliere lo zero mode da X 
-    #run_kernel(zero_X_ker) 
+    run_kernel(zero_X_ker) 
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -166,6 +166,21 @@ end
     return nothing
 end
 
+function measure_zero_mode_z(z, Npoint2)
+
+    zero_mode = CUDA.sum(
+        z[:, 9:9, :, :, 1:1, :],
+        dims=(3,4)
+    ) ./ Npoint2
+
+    abs_zero = sqrt.(
+        zero_mode[1,1,1,1,1,:].^2 .+
+        zero_mode[2,1,1,1,1,:].^2
+    )
+
+    return Array(abs_zero)
+end
+
 
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
     
@@ -222,6 +237,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
     zero_modo_z = CUDA.zeros(F, I(2), n_ords, n_comps, n_copies)
     zero_modo_X = CUDA.zeros(F, n_ords, I(2), n_copies) 
+    
 
 
     energia = CUDA.zeros(F, n_ords, n_copies)
@@ -317,6 +333,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_Eu_ker, zero_X_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
+            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             run_kernel(zEu_coor_ker)
             
             # Calcola ora i gradienti per lo step RK 
@@ -332,15 +350,30 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
-            run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
+            println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
+
+            run_kernel(z_corr_ker)
+
+            println("Dopo prima normalizzazione: ", measure_zero_mode_z(z, Npoint2))
+
             run_kernel(gauge_ker)
             run_kernel(apply_gauge_ker)
-            run_kernel(z_corr_ker) # normalizza di nuovo! 
-            if t <= 3
+
+            println("Dopo gauge transformation: ",measure_zero_mode_z(z, Npoint2))
+
+            run_kernel(z_corr_ker)
+
+            println("Dopo seconda normalizzazione: ",measure_zero_mode_z(z, Npoint2))
+            #=run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
+            run_kernel(gauge_ker)
+            run_kernel(apply_gauge_ker)
+            run_kernel(z_corr_ker) # normalizza di nuovo!=#
+            
+            #=if t <= 3
                 println("[DIAGNOSTICA] Salvataggio del tensore z per lo step $t...")
-                # Trasferisce l'array dalla GPU alla CPU con Array(z) e lo salva
+                #Trasferisce l'array dalla GPU alla CPU con Array(z) e lo salva
                 serialize("z_diagnostica_step_$(t).jls", Array(z))
-            end
+            end=#
 
 
         end

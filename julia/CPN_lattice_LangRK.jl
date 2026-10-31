@@ -87,6 +87,7 @@ end
 function RK_evolution_z!(
     z::CuArray{F, 6}, 
     noise_z::CuArray{F, 6}, 
+    noise_z_Eu::CuArray{F, 6},
     gradz_Eu::CuArray{F, 6},
     dt::F,
     grad_z::CuArray{F, 6},
@@ -95,7 +96,7 @@ function RK_evolution_z!(
     # esegue l'evoluzione di uno step secondo l'algoritmo RK del secondo ordine
     # per l'equazione di Langevin 
     
-    @inbounds @views z[:,2:end,:,:,:,:] .+= (F(n_comps) * F(0.5) * dt) .* (grad_z[:,2:end,:,:,:,:] .+ gradz_Eu[:,2:end,:,:,:,:]) .+ (sqrt(dt) .* noise_z[:,2:end,:,:,:,:])
+    @inbounds @views z[:,2:end,:,:,:,:] .+= (F(n_comps) * F(0.5) * dt) .* (grad_z[:,2:end,:,:,:,:] .+ gradz_Eu[:,2:end,:,:,:,:]) .+ (F(0.5) * sqrt(dt)) .* (noise_z[:,2:end,:,:,:,:] + noise_z_Eu[:,2:end,:,:,:,:])
     
     return nothing
 end
@@ -233,6 +234,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradU_Eu = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     Exp_buffer = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_copies)
     noise_z = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
+    noise_z_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
     zero_modo_z = CUDA.zeros(F, I(2), n_ords, n_comps, n_copies)
@@ -285,6 +287,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     zero_X_ker = compile_kernel(f_zero_X, (X, zero_modo_X), Npoint2, n_copies)
     
     noise_ker = compile_kernel(f_proj_noise, (noise_z, z, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
+    noise_ker_Eu = compile_kernel(f_proj_noise, (noise_z_Eu, z_Eu, c_sc_buffA, vec_buffer_comps), Npoint2, n_copies)
   
     compute_ener_ker = compile_kernel(f_ener, (z, U, ener, M1, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
 
@@ -306,6 +309,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Genera nuovo rumore gaussiano 
             reset_noise_z!(noise_z, cuda_rng)
             reset_noise_X!(noise_X, cuda_rng)
+            noise_z_Eu .= noise_z
             # --- Tolgo lo Zero - Mode dal rumore;
             # --- Sottrai la media spaziale dal rumore appena generato;
             #=@inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
@@ -336,11 +340,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
             CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             run_kernel(zEu_coor_ker)
+            run_kernel(noise_ker_Eu)
             
             # Calcola ora i gradienti per lo step RK 
             compute_gradients!(gradker_z_Eu, gradker_U_Eu)
             RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_ker, zero_X_ker, n_comps, Npoint2)
-            RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , n_comps)
+            RK_evolution_z!(z, noise_z, noise_z_Eu, gradz_Eu, dt, gradient_z , n_comps)
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting

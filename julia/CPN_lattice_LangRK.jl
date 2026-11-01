@@ -183,19 +183,24 @@ function measure_zero_mode_z(z, Npoint2)
 end
 
 function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, I <: Integer}
+    gauge_im = zero(F)
+    
+    CUDA.@allowscalar begin
+        for n::I = 1:n_comps
+            v_re = z[1, 1, 1, 1, n, 1]
+            v_im = z[2, 1, 1, 1, n, 1]
+            
+            # Ordine 1
+            z1_re = z[1, 2, 1, 1, n, 1]
+            z1_im = z[2, 2, 1, 1, n, 1]
 
-    for n::I = 1:n_comps
-        v_re = z[1,1,1,1,n,1]
-        v_im = z[2,1,1,1,n,1]
-        z1_re = z[1,2,1,1,n,1]
-        z1_im = z[2,2,1,1,n,1]
-
-        gauge_im = v_re * z_im - z_re * v_im
-
-    end 
+            # Somma su tutte le componenti n
+            gauge_im += v_re * z1_im - z1_re * v_im
+        end 
+    end
     
     return gauge_im
-end 
+end
 
 
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}

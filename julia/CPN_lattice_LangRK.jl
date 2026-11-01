@@ -385,6 +385,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             run_kernel(apply_gauge_ker)
 
             println("Dopo gauge transformation: ",measure_zero_mode_z(z, Npoint2))
+            println("Verifica gauge post trasformazione: ", measure_gauge(z, n_comps))
 
             CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
 

@@ -190,11 +190,11 @@ function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, 
         z1_re = z[1,2,1,1,n,1]
         z1_im = z[2,2,1,1,n,1]
 
-        gauge = v_re * z_im - z_re * v_im
+        gauge_im = v_re * z_im - z_re * v_im
 
     end 
     
-    return gauge
+    return gauge_im
 end 
 
 

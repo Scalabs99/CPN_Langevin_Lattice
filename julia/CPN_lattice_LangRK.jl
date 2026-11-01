@@ -182,6 +182,21 @@ function measure_zero_mode_z(z, Npoint2)
     return Array(abs_zero)
 end
 
+function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, I <: Integer}
+
+    for n::I = 1:n_comps
+        v_re = z[1,1,1,1,n,1]
+        v_im = z[2,1,1,1,n,1]
+        z1_re = z[1,2,1,1,n,1]
+        z1_im = z[2,2,1,1,n,1]
+
+        gauge = v_re * z_im - z_re * v_im
+
+    end 
+    
+    return gauge
+end 
+
 
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
     
@@ -376,6 +391,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             run_kernel(z_corr_ker)
 
             println("Dopo seconda normalizzazione: ",measure_zero_mode_z(z, Npoint2))
+            println("Verifica gauge post normalizzazione: ", measure_gauge(z, n_comps))
             #=run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
             run_kernel(gauge_ker)
             run_kernel(apply_gauge_ker)

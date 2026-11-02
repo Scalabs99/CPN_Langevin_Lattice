@@ -69,11 +69,11 @@ function Euler_step_U!(
     @inbounds @views X[2:end, :, :, :, :] .= ((F(n_comps) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
  
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
-    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    #CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
 
     
     # Lancia il kernel per togliere lo zero mode da X 
-    run_kernel(zero_X_ker) 
+    #run_kernel(zero_X_ker) 
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -124,10 +124,10 @@ function RK_evolution_U!(
     @inbounds @views X[2:end,:,:,:,:] .= (F(n_comps) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
 
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
-    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    #CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
-    run_kernel(zero_X_ker)
+    #run_kernel(zero_X_ker)
      
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 

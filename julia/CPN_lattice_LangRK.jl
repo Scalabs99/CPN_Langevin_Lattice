@@ -357,8 +357,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_Eu_ker, zero_X_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
-            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
-            CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+            #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            #CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             run_kernel(zEu_coor_ker)
             run_kernel(noise_ker_Eu)
             
@@ -369,12 +369,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
-            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
 
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
-            CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+            #CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
             run_kernel(z_corr_ker)
@@ -387,12 +387,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             println("Dopo gauge transformation: ",measure_zero_mode_z(z, Npoint2))
             println("Verifica gauge post trasformazione: ", measure_gauge(z, n_comps))
 
-            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
 
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
-            CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+            #CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             println("Dopo rimozione modo zero post gauge: ",measure_zero_mode_z(z, Npoint2))
             run_kernel(z_corr_ker)
 

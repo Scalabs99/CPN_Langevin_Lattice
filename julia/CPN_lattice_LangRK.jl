@@ -167,22 +167,35 @@ end
     return nothing
 end
 
-function measure_zero_mode_z(z, Npoint2)
+#=function measure_zero_mode_z(z, Npoint2)
 
     zero_mode = CUDA.sum(
-        z[:, 9:9, :, :, 1:1, :],
+        z[:, :, :, :, :, :],
         dims=(3,4)
     ) ./ Npoint2
 
     abs_zero = sqrt.(
-        zero_mode[1,1,1,1,1,:].^2 .+
-        zero_mode[2,1,1,1,1,:].^2
+        zero_mode[1,:,1,1,:,:].^2 .+
+        zero_mode[2,:,1,1,:,:].^2
     )
 
     return Array(abs_zero)
+end=#
+
+function measure_zero_mode_z(z, Npoint2)
+    zero_mode = CUDA.sum(z[:, :, :, :, :, :], dims=(3,4)) ./ Npoint2
+    
+    # Riporta semplicemente l'intero tensore sulla CPU
+    return Array(zero_mode) 
 end
 
-function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, I <: Integer}
+function measure_zero_mode_X(X, Npoint2)
+    zero_mode = CUDA.sum(X[:,:,:,:,:], dims=(2,3)) ./ Npoint2 
+
+    return Array(zero_mode)
+end 
+
+#=function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, I <: Integer}
     gauge_im = zero(F)
     
     CUDA.@allowscalar begin
@@ -200,7 +213,7 @@ function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, 
     end
     
     return gauge_im
-end
+end=#
 
 
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
@@ -316,11 +329,11 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     print(current_time(), "Variables initialization and Kernel compilation successfully completed. ")
     println("Simulation is starting...")
 
-    CUDA.@allowscalar begin 
+    #=CUDA.@allowscalar begin 
         println("Campione campo U all'ordine zero: ", U[1, 1, 1, 1, 1, 1])
         println("z_Re al tempo zero: ", z[1, 1, 1, 1, 1, 1])
         println("z_Im al tempo zero: ", z[2, 1, 1, 1, 1, 1])
-    end 
+    end=# 
 
 
     # Main computation loop
@@ -330,8 +343,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             reset_noise_z!(noise_z, cuda_rng)
             reset_noise_X!(noise_X, cuda_rng)
             noise_z_Eu .= noise_z
-            # --- Tolgo lo Zero - Mode dal rumore;
-            # --- Sottrai la media spaziale dal rumore appena generato;
+            # Tolgo lo Zero - Mode dal rumore;
+            # Sottrai la media spaziale dal rumore appena generato;
             #=@inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
             @inbounds @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
             @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
@@ -340,19 +353,6 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
             compute_gradients!(gradker_z, gradker_U)
-
-            if t <= 100
-                # grad_U ha dimensioni: (n_ords, Npoint, Npoint, mu, copies)
-                # Calcoliamo la media per l'ordine 2 (il primo non banale) e mu=1,2 sulla copia 1
-                @views media_grad_U_mu1 = CUDA.sum(gradient_U[2, :, :, 1, 1]) / Npoint2
-                @views media_grad_U_mu2 = CUDA.sum(gradient_U[2, :, :, 2, 1]) / Npoint2
-                @views media_grad_zRe = CUDA.sum(gradient_z[1, 2, :, :, 5, 1]) / Npoint2 
-                @views media_grad_zIm = CUDA.sum(gradient_z[2, 2, :, :, 5, 1]) / Npoint2
-                println("Step $t | Media grad_U (Ord 2, mu=1): ", media_grad_U_mu1)
-                println("Step $t | Media grad_U (Ord 2, mu=2): ", media_grad_U_mu2)
-                println("Step $t | Media grad_zRe (Ord 2, n=1): ", media_grad_zRe)
-                println("Step $t | Media grad_zIm (Ord 2, n=1): ", media_grad_zIm)
-            end
 
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_Eu_ker, zero_X_ker, n_comps, Npoint2)
@@ -375,17 +375,18 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             #CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
-            println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
+            #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
             run_kernel(z_corr_ker)
 
-            println("Dopo prima normalizzazione: ", measure_zero_mode_z(z, Npoint2))
+            println("zero modo z ogni ordine ogni componente: ", measure_zero_mode_z(z, Npoint2))
+            println("zero modo X ogni ordine ogni componente: ", measure_zero_mode_X(X, Npoint2))
 
-            run_kernel(gauge_ker)
-            run_kernel(apply_gauge_ker)
+            #=run_kernel(gauge_ker)
+            run_kernel(apply_gauge_ker)=#
 
-            println("Dopo gauge transformation: ",measure_zero_mode_z(z, Npoint2))
-            println("Verifica gauge post trasformazione: ", measure_gauge(z, n_comps))
+            #println("Dopo gauge transformation: ",measure_zero_mode_z(z, Npoint2))
+            #println("Verifica gauge post trasformazione: ", measure_gauge(z, n_comps))
 
             #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
 
@@ -393,11 +394,11 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             #CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
-            println("Dopo rimozione modo zero post gauge: ",measure_zero_mode_z(z, Npoint2))
-            run_kernel(z_corr_ker)
+            #println("Dopo rimozione modo zero post gauge: ",measure_zero_mode_z(z, Npoint2))
+            #run_kernel(z_corr_ker)
 
-            println("Dopo seconda normalizzazione: ",measure_zero_mode_z(z, Npoint2))
-            println("Verifica gauge post normalizzazione: ", measure_gauge(z, n_comps))
+            #println("Dopo seconda normalizzazione: ",measure_zero_mode_z(z, Npoint2))
+            #println("Verifica gauge post normalizzazione: ", measure_gauge(z, n_comps))
             #=run_kernel(z_corr_ker) # Solo alla fine normalizza !! 
             run_kernel(gauge_ker)
             run_kernel(apply_gauge_ker)

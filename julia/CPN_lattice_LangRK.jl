@@ -69,11 +69,11 @@ function Euler_step_U!(
     @inbounds @views X[2:end, :, :, :, :] .= ((F(n_comps) * dt * F(2)) .* grad_U[2:end, :, :, :, :]) .+ (sqrt(F(2) * dt) .* noise_X[2:end, :, :, :, :])
  
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
-    #CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
 
     
     # Lancia il kernel per togliere lo zero mode da X 
-    #run_kernel(zero_X_ker) 
+    run_kernel(zero_X_ker) 
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) * U = U_eu
     compute_exponential!(ExpU_Eu_ker)
@@ -124,10 +124,10 @@ function RK_evolution_U!(
     @inbounds @views X[2:end,:,:,:,:] .= (F(n_comps) * F(2) * F(0.5) * dt) .* (gradU[2:end,:,:,:,:] .+ gradU_Eu[2:end,:,:,:,:]) .+ (sqrt(F(2) * dt) .* noise_X[2:end,:,:,:,:])
 
     # Sottrazione zero mode (usando dims=(2,3) in un solo passaggio)
-    #CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
+    CUDA.@sync @inbounds @views zero_modo_X .= CUDA.sum(X, dims=(2,3))[:,1,1,:,:] ./ Npoint2
     
     # Lancia il kernel per togliere lo zero mode da X 
-    #run_kernel(zero_X_ker)
+    run_kernel(zero_X_ker)
      
 
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
@@ -350,10 +350,10 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             noise_z_Eu .= noise_z
             # Tolgo lo Zero - Mode dal rumore;
             # Sottrai la media spaziale dal rumore appena generato;
-            #=@inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
+            @inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
             @inbounds @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
             @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
-            @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X=#
+            @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
             run_kernel(noise_ker)
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
@@ -362,8 +362,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_Eu_ker, zero_X_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
-            #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
-            #CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             run_kernel(zEu_coor_ker)
             run_kernel(noise_ker_Eu)
             
@@ -374,12 +374,12 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
-            #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, 1:1, :], dims=(3, 4)) ./ Npoint2
+            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
 
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
-            #CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
+            CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
             run_kernel(z_corr_ker)
@@ -404,7 +404,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             #CUDA.@sync @inbounds @views z[:, 2:end, :, :, 1:1, :] .-= zero_modo_z
             #println("Dopo rimozione modo zero post gauge: ",measure_zero_mode_z(z, Npoint2))
-            #run_kernel(z_corr_ker)
+            run_kernel(z_corr_ker)
 
             #println("Dopo seconda normalizzazione: ",measure_zero_mode_z(z, Npoint2))
             #println("Verifica gauge post normalizzazione: ", measure_gauge(z, n_comps))

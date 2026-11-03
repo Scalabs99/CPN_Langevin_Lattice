@@ -186,8 +186,8 @@ function measure_zero_mode_z(z, Npoint2, i)
     zero_mode = CUDA.sum(z[:, :, :, :, i, :], dims=(3,4)) ./ Npoint2
     
     abs_zero = sqrt.(
-        zero_mode[1,:,:,:,i,:].^2 .+ 
-        zero_mode[2,:,:,:,i,:].^2
+        zero_mode[1,:,:,:,:,:].^2 .+ 
+        zero_mode[2,:,:,:,:,:].^2
     )
 
     # Riporta semplicemente l'intero tensore sulla CPU

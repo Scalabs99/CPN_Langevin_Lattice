@@ -183,7 +183,7 @@ end
 end=#
 
 function measure_zero_mode_z(z, Npoint2, i)
-    zero_mode = CUDA.sum(z[:, 9:9, :, :, i, :], dims=(3,4)) ./ Npoint2
+    zero_mode = CUDA.sum(z[:, :, :, :, i, :], dims=(3,4)) ./ Npoint2
     
     abs_zero = sqrt.(
         zero_mode[1,:,:,:,i,:].^2 .+ 

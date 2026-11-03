@@ -182,15 +182,20 @@ end
     return Array(abs_zero)
 end=#
 
-function measure_zero_mode_z(z, Npoint2)
-    zero_mode = CUDA.sum(z[:, :, :, :, :, :], dims=(3,4)) ./ Npoint2
+function measure_zero_mode_z(z, Npoint2, i)
+    zero_mode = CUDA.sum(z[:, 9:9, :, :, i, :], dims=(3,4)) ./ Npoint2
     
+    abs_zero = sqrt.(
+        zero_mode[1,:,:,:,i,:].^2 .+ 
+        zero_mode[2,:,:,:,i,:].^2
+    )
+
     # Riporta semplicemente l'intero tensore sulla CPU
-    return Array(zero_mode) 
+    return Array(abs_zero) 
 end
 
-function measure_zero_mode_X(X, Npoint2)
-    zero_mode = CUDA.sum(X[:,:,:,:,:], dims=(2,3)) ./ Npoint2 
+function measure_zero_mode_X(X, Npoint2, mu)
+    zero_mode = CUDA.sum(X[:,:,:,mu,:], dims=(2,3)) ./ Npoint2 
 
     return Array(zero_mode)
 end 
@@ -378,10 +383,14 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
             run_kernel(z_corr_ker)
-
-            println("zero modo z ogni ordine ogni componente: ", measure_zero_mode_z(z, Npoint2))
-            println("zero modo X ogni ordine ogni componente: ", measure_zero_mode_X(X, Npoint2))
-
+            for i::I = 1:n_comps
+                println("zero modo z ogni ordine ogni componente: ", measure_zero_mode_z(z, Npoint2, i))
+                println("==========================================================")
+            end 
+            for mu::I = 1:2
+                println("zero modo X ogni ordine ogni componente: ", measure_zero_mode_X(X, Npoint2, mu))
+                println("==========================================================")
+            end 
             #=run_kernel(gauge_ker)
             run_kernel(apply_gauge_ker)=#
 

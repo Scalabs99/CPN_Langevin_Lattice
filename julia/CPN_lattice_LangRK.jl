@@ -382,13 +382,22 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
-            run_kernel(z_corr_ker)
             for i::I = 1:n_comps
-                println("zero modo z ogni ordine ogni componente: ", measure_zero_mode_z(z, Npoint2, i))
+                println("zero modo z pre norm ogni ordine componente $i: ", measure_zero_mode_z(z, Npoint2, i))
                 println("==========================================================")
             end 
             for mu::I = 1:2
-                println("zero modo X ogni ordine ogni componente: ", measure_zero_mode_X(X, Npoint2, mu))
+                println("zero modo X ogni ordine ogni componente $mu: ", measure_zero_mode_X(X, Npoint2, mu))
+                println("==========================================================")
+            end 
+
+            run_kernel(z_corr_ker)
+            for i::I = 1:n_comps
+                println("zero modo z post norm ogni ordine componente $i: ", measure_zero_mode_z(z, Npoint2, i))
+                println("==========================================================")
+            end 
+            for mu::I = 1:2
+                println("zero modo X ogni ordine ogni componente $mu: ", measure_zero_mode_X(X, Npoint2, mu))
                 println("==========================================================")
             end 
             

@@ -372,6 +372,16 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_ker, zero_X_ker, n_comps, Npoint2)
             RK_evolution_z!(z, noise_z, noise_z_Eu, gradz_Eu, dt, gradient_z , n_comps)
 
+            for i::I = 1:n_comps
+                println("zero modo z pre sottrazione ogni ordine componente $i: ", measure_zero_mode_z(z, Npoint2, i))
+                println("==========================================================")
+            end 
+            for mu::I = 1:2
+                println("zero modo X pre sottrazione ordine ogni componente $mu: ", measure_zero_mode_X(X, Npoint2, mu))
+                println("==========================================================")
+            end 
+
+
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
             CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
@@ -381,15 +391,6 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
             CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
-
-            for i::I = 1:n_comps
-                println("zero modo z pre norm ogni ordine componente $i: ", measure_zero_mode_z(z, Npoint2, i))
-                println("==========================================================")
-            end 
-            for mu::I = 1:2
-                println("zero modo X ogni ordine ogni componente $mu: ", measure_zero_mode_X(X, Npoint2, mu))
-                println("==========================================================")
-            end 
 
             run_kernel(z_corr_ker)
             for i::I = 1:n_comps

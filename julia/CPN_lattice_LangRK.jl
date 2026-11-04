@@ -249,7 +249,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         ener_meas::CuArray{F, 5} = args.ener_meas
     end
 
-    #z_fname::String = "z_mat_file.mat"
+    z_fname::String = "zeromodo_mat_file.mat"
     
     n_ords = max_ptord + one(max_ptord)
     Npoint2 = Npoint^2
@@ -283,7 +283,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     energia = CUDA.zeros(F, n_ords, n_copies)
     ener = CUDA.zeros(F, n_ords, Npoint, Npoint, n_copies)
 
-    #z_meas = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies, n_meas)
+    zeromodo_meas = CuArray{F}(undef, I(2), n_ords, I(1), I(1), n_comps, n_copies, n_meas)
 
     en_fnames = [en_fname]
     for i in 2:n_copies
@@ -381,10 +381,13 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
                 println("==========================================================")
             end 
 
+            @inbounds @views zeromodo_meas[:,:,:,:,:,:,t] .= z
+
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
             CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
+            @inbounds @views zeromodo_meas[:,:,:,:,t] .= zero_modo_z
 
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
@@ -448,7 +451,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
     # Saving energy site-by-site on matlab file
     save_lattice && save_matlab_energy(lat_fname, Array(ener_meas))
-    #save_matlab_energy(z_fname, Array(z_meas))
+    save_matlab_energy(z_fname, Array(zeromodo_meas))
     println(current_time(), "All measurements successfully taken.")
     
     return

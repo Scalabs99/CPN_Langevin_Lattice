@@ -381,8 +381,6 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
                 println("==========================================================")
             end 
 
-            @inbounds @views zeromodo_meas[:,:,:,:,:,:,t] .= z
-
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting

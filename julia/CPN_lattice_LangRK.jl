@@ -167,21 +167,6 @@ end
     return nothing
 end
 
-#=function measure_zero_mode_z(z, Npoint2)
-
-    zero_mode = CUDA.sum(
-        z[:, :, :, :, :, :],
-        dims=(3,4)
-    ) ./ Npoint2
-
-    abs_zero = sqrt.(
-        zero_mode[1,:,1,1,:,:].^2 .+
-        zero_mode[2,:,1,1,:,:].^2
-    )
-
-    return Array(abs_zero)
-end=#
-
 function measure_zero_mode_z(z, Npoint2, i)
     zero_mode = CUDA.sum(z[:, :, :, :, i, :], dims=(3,4)) ./ Npoint2
     
@@ -194,32 +179,30 @@ function measure_zero_mode_z(z, Npoint2, i)
     return Array(abs_zero) 
 end
 
+# Quando ho il CUDA.sum non conviene fare un kernel. Il kernel va bene per cose puntuali 
+function compute_zeromode_coefficients(z::CuArray{F, 6}, derivate::CuArray{F, 5}, k::I) where {F <: AbstractFloat, I <: Integer}
+    # Calcolo del prodotto scalare reale globale per la direzione 1
+    c1 = CUDA.sum(
+        derivate[1, :, :, :, 1, :] .* z[1, k, :, :, :, :] .+ 
+        derivate[2, :, :, :, :, 1] .* z[2, k, :, :, :, :], 
+        dims=(1, 2, 3) # Regola le dimensioni per mantenere separate le copie se necessario
+    )
+    
+    # Calcolo per la direzione 2
+    c2 = CUDA.sum(
+        derivate[1, :, :, :, :, 2] .* z[1, k, :, :, :, :] .+ 
+        derivate[2, :, :, :, :, 2] .* z[2, k, :, :, :, :], 
+        dims=(1, 2, 3)
+    )
+    
+    return c1, c2
+end
+
 function measure_zero_mode_X(X, Npoint2, mu)
     zero_mode = CUDA.sum(X[:,:,:,mu,:], dims=(2,3)) ./ Npoint2 
 
     return Array(zero_mode)
 end 
-
-#=function measure_gauge(z::CuArray{F, 6}, n_comps::I) where {F <: AbstractFloat, I <: Integer}
-    gauge_im = zero(F)
-    
-    CUDA.@allowscalar begin
-        for n::I = 1:n_comps
-            v_re = z[1, 1, 1, 1, n, 1]
-            v_im = z[2, 1, 1, 1, n, 1]
-            
-            # Ordine 1
-            z9_re = z[1, 9, 1, 1, n, 1]
-            z9_im = z[2, 9, 1, 1, n, 1]
-
-            # Somma su tutte le componenti n
-            gauge_im += v_re * z9_im - z9_re * v_im
-        end 
-    end
-    
-    return gauge_im
-end=#
-
 
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
     

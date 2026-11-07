@@ -618,7 +618,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             for j::I = 2:n_ptords 
                 alpha = zero(F)
                 
-                # 1. Termine lineare: -Re[nu_bar * z_tilde]
+                # Termine lineare: -Re[nu_bar * z_tilde]
                 for n::I = 1:n_comps 
                     @inbounds nu_real = z[I(1),I(1),i,k,n,c]
                     @inbounds nu_imm = z[I(2),I(1),i,k,n,c]
@@ -628,7 +628,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                     alpha -= nu_real * z_real + nu_imm * z_imm
                 end 
 
-                # 2. Prodotti di Cauchy C_n / 2 usando i campi GIA' CORRETTI (l < j)
+                # Prodotti di Cauchy C_n / 2 usando i campi GIA' CORRETTI (l < j)
                 for l::I = 2:(j-1) 
                     for n::I = 1:n_comps 
                         @inbounds z1_real = z[I(1),l,i,k,n,c]
@@ -640,7 +640,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                     end 
                 end 
                 
-                # 3. AGGIORNAMENTO IMMEDIATO: Correggo z all'ordine j prima di passare al j+1
+                # Correggo z all'ordine j prima di passare al j+1
                 for n::I = 1:n_comps 
                     @inbounds nu_real = z[I(1),I(1),i,k,n,c]
                     @inbounds nu_imm = z[I(2),I(1),i,k,n,c]
@@ -673,7 +673,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
 
     # Calcola la trasformazione di gauge nel gauge di backgrounds 
     # Ebar * E = 1 fissa la parte reale ( fai il conto con lo sviluppo perturbativo)
-    # Im(v_bar_N * z_N') = 0 !! ( dove z_N' è il trasformato di gauge per l'N-esima componente del vettore z sviluppato e con 
+    # Im(v_bar * z') = 0 !! ( dove z' è il trasformato di gauge del vettore z sviluppato e con 
     # |z(x)|^2 = 1)
     function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
@@ -865,6 +865,77 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end
 
+    # Computes the discrete covariant derivative
+    function compute_derivative_ker!(
+        z::CuDeviceArray{F, 6, 1}, 
+        derivate::CuDeviceArray{F, 6, 1}, 
+        M1::CuDeviceArray{F, 7, 1}
+    )
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            
+            i_dx, k_dx = neighbour_right(i, k) 
+            i_dw, k_dw = neighbour_down(i, k) 
+            for mu::I = 1:2 
+                
+                if mu == I(1)
+                    i_fwd, k_fwd = i_dw, k
+                else
+                    i_fwd, k_fwd = i, k_dx
+                end
+
+                for n::I = 1:n_comps 
+                    @inbounds U_re = U[I(1), i, k, c, mu] # (o con gli indici corretti per U)
+                    @inbounds U_im = U[I(2), i, k, c, mu]
+                    @inbounds M1_re = M1[I(1), I(1), i, k, mu, n, c]
+                    @inbounds M1_im = M1[I(2), I(1), i, k, mu, n, c]
+                    @inbounds z_re_fwd = z[I(1), I(1), i_fwd, k_fwd, n, c]
+                    @inbounds z_im_fwd = z[I(2), I(1), i_fwd, k_fwd, n, c]
+                    
+                    UM_re = U_re * M1_re - U_im * M1_im
+                    UM_im = U_re * M1_im + U_im * M1_re
+
+                    UM_z_re = UM_re * z_re_fwd - UM_im * z_im_fwd
+                    UM_z_im = UM_re * z_im_fwd + UM_im * z_re_fwd
+
+                    @inbounds derivate[I(1), i, k, n, mu, c] = UM_z_re - z[I(1),I(1),i,k,n,c]
+                    @inbounds derivate[I(2), i, k, n, mu, c] = UM_z_im - z[I(2),I(1),i,k,n,c]
+                end 
+
+
+            end 
+
+        end 
+        return nothing 
+    end 
+
+    function remove_zeromode_kernel!(
+        z::CuDeviceArray{F, 6, 1}, 
+        derivate::CuDeviceArray{F, 5, 1}, 
+        c1::CuDeviceArray{F, 1, 1}, 
+        c2::CuDeviceArray{F, 1, 1}, 
+        k::I
+    )
+        i, k, c = get_indexes() # x, y, copia
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            for n::I = 1:n_comps
+            
+                # Leggi i coefficienti per questa replica
+                @inbounds coeff1 = c1[c] 
+                @inbounds coeff2 = c2[c]
+
+                # Sottrai la direzione 1
+                @inbounds z[I(1), k, i, j, n, c] -= coeff1 * derivate[I(1), i, j, n, I(1), c]
+                @inbounds z[I(2), k, i, j, n, c] -= coeff1 * derivate[I(2), i, j, n, I(1), c]
+
+                # Sottrai la direzione 2
+                @inbounds z[I(1), k, i, j, n, c] -= coeff2 * derivate[I(1), i, j, n, I(2), c]
+                @inbounds z[I(2), k, i, j, n, c] -= coeff2 * derivate[I(2), i, j, n, I(2), c]
+            end
+        end
+        return nothing
+    end
+
     #=function zeromode_z_kernel!(z::CuDeviceArray{F, 6, 1}, zero_modo_z::CuDeviceArray{F, 4, 1})
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
@@ -879,7 +950,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing
     end=#
 
-    function zeromode_X_kernel!(X::CuDeviceArray{F, 5, 1}, zero_modo_X::CuDeviceArray{F, 3, 1})
+    #=function zeromode_X_kernel!(X::CuDeviceArray{F, 5, 1}, zero_modo_X::CuDeviceArray{F, 3, 1})
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
             for mu::I = 1:2 
@@ -889,7 +960,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end 
         end 
         return nothing 
-    end 
+    end=# 
 
-    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, zeromode_X_kernel!)
+    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, )
 end

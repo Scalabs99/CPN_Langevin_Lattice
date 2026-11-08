@@ -605,6 +605,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end=#
 
+    # Funzione corretta, che calcola l'ordine successivo utilizzando gli ordini precedenti già sistemati
     function correct_z_kernel!(
         z::CuDeviceArray{F, 6, 1}, 
         sc_buffA::CuDeviceArray{F, 4, 1},
@@ -728,7 +729,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         end
         return nothing
     end
-    #=function compute_gauge_transform_kernel!(
+    
+    function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
         E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo ?? 
     )
@@ -774,7 +776,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end
         end
         return nothing
-    end=#
+    end
 
     function apply_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
@@ -885,8 +887,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                 end
 
                 for n::I = 1:n_comps 
-                    @inbounds U_re = U[I(1), i, k, c, mu] # (o con gli indici corretti per U)
-                    @inbounds U_im = U[I(2), i, k, c, mu]
+                    @inbounds U_re = U[I(1), i, k, mu, c] # (o con gli indici corretti per U)
+                    @inbounds U_im = U[I(2), i, k, mu, c]
                     @inbounds M1_re = M1[I(1), I(1), i, k, mu, n, c]
                     @inbounds M1_im = M1[I(2), I(1), i, k, mu, n, c]
                     @inbounds z_re_fwd = z[I(1), I(1), i_fwd, k_fwd, n, c]
@@ -910,27 +912,66 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
     end 
 
     function remove_zeromode_kernel!(
-        z::CuDeviceArray{F, 6, 1}, 
+        z::CuDeviceArray{F, 6 ,1}, 
         derivate::CuDeviceArray{F, 5, 1}, 
-        c1::CuDeviceArray{F, 1, 1}, 
-        c2::CuDeviceArray{F, 1, 1}, 
-        k::I
+        coeff_buffer::CuDeviceArray{F, 6, 1}, 
     )
-        i, k, c = get_indexes() # x, y, copia
+
+        i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
-            for n::I = 1:n_comps
             
-                # Leggi i coefficienti per questa replica
-                @inbounds coeff1 = c1[c] 
-                @inbounds coeff2 = c2[c]
+            # Ricordati di inizializzare a zero il buffer per le derivate nel main!!! 
+            for j::I = 2:n_ptords
+                for mu::I = 1:2 
+                    @inbounds coeff_buffer[I(1), j, i, k, mu, c] = zero(F)
+                    @inbounds coeff_buffer[I(2), j, i, k, mu, c] = zero(F)
+                    
+                    @inbounds D_re = derivate[I(1), i, k, n, mu, c]
+                    @inbounds D_im = derivate[I(2), i, k, n, mu, c]
+                    @inbounds z_re = z[I(1), j, i, k, n, c]
+                    @inbounds z_im = z[I(2), j, i, k, n, c]
 
-                # Sottrai la direzione 1
-                @inbounds z[I(1), k, i, j, n, c] -= coeff1 * derivate[I(1), i, j, n, I(1), c]
-                @inbounds z[I(2), k, i, j, n, c] -= coeff1 * derivate[I(2), i, j, n, I(1), c]
+                    for n::I = 1:n_comps 
 
-                # Sottrai la direzione 2
-                @inbounds z[I(1), k, i, j, n, c] -= coeff2 * derivate[I(1), i, j, n, I(2), c]
-                @inbounds z[I(2), k, i, j, n, c] -= coeff2 * derivate[I(2), i, j, n, I(2), c]
+                        @inbounds D_re = derivate[I(1), i, k, n, mu, c]
+                        @inbounds D_im = derivate[I(2), i, k, n, mu, c]
+                        @inbounds z_re = z[I(1), j, i, k, n, c]
+                        @inbounds z_im = z[I(2), j, i, k, n, c]
+
+                        @inbounds coeff_buffer[I(1), j, i, k, mu, c] += D_re * z_re + D_im * z_im
+                        @inbounds coeff_buffer[I(2), j, i, k, mu, c] += D_re * z_im - D_im * z_re
+                    end 
+                end 
+
+            end 
+        end 
+        return nothing 
+    end 
+
+    function remove_zeromode_kernel!(
+        z::CuDeviceArray{F, 6, 1}, 
+        derivate::CuDeviceArray{F, 6, 1}, 
+        global_coefs::CuDeviceArray{F, 6, 1}
+    )
+        i, k, c = get_indexes()
+        if (i <= Npoint && k <= Npoint && c <= n_copies)
+            for mu::I = 1:2
+                # PARTIAMO DA j = 2 (ORDINE g^1)
+                for j::I = 2:n_ptords
+                    @inbounds C_re = global_coefs[I(1), j, I(1), I(1), mu, c]
+                    @inbounds C_im = global_coefs[I(2), j, I(1), I(1), mu, c]
+                    
+                    for n::I = 1:n_comps
+                        @inbounds D_re = derivate[I(1), i, k, n, mu, c]
+                        @inbounds D_im = derivate[I(2), i, k, n, mu, c]
+                        
+                        proj_re = C_re * D_re - C_im * D_im
+                        proj_im = C_re * D_im + C_im * D_re
+                        
+                        @inbounds z[I(1), j, i, k, n, c] -= proj_re
+                        @inbounds z[I(2), j, i, k, n, c] -= proj_im
+                    end
+                end
             end
         end
         return nothing
@@ -962,5 +1003,5 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end=# 
 
-    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, )
+    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, compute_derivative_ker!, remove_zeromode_kernel!)
 end

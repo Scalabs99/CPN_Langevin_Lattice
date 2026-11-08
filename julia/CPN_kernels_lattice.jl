@@ -927,11 +927,6 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                     @inbounds coeff_buffer[I(1), j, i, k, mu, c] = zero(F)
                     @inbounds coeff_buffer[I(2), j, i, k, mu, c] = zero(F)
                     
-                    @inbounds D_re = derivate[I(1), i, k, n, mu, c]
-                    @inbounds D_im = derivate[I(2), i, k, n, mu, c]
-                    @inbounds z_re = z[I(1), j, i, k, n, c]
-                    @inbounds z_im = z[I(2), j, i, k, n, c]
-
                     for n::I = 1:n_comps 
 
                         @inbounds D_re = derivate[I(1), i, k, n, mu, c]

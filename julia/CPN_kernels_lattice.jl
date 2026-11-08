@@ -914,7 +914,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
 
     function compute_coeff_kernel!(
         z::CuDeviceArray{F, 6 ,1}, 
-        derivate::CuDeviceArray{F, 5, 1}, 
+        derivate::CuDeviceArray{F, 6, 1}, 
         coeff_buffer::CuDeviceArray{F, 6, 1}, 
     )
 

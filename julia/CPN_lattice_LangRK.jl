@@ -179,25 +179,6 @@ function measure_zero_mode_z(z, Npoint2, i)
     return Array(abs_zero) 
 end
 
-# Quando ho il CUDA.sum non conviene fare un kernel. Il kernel va bene per cose puntuali 
-function compute_zeromode_coefficients(z::CuArray{F, 6}, derivate::CuArray{F, 5}, k::I) where {F <: AbstractFloat, I <: Integer}
-    # Calcolo del prodotto scalare reale globale per la direzione 1
-    c1 = CUDA.sum(
-        derivate[1, :, :, :, 1, :] .* z[1, k, :, :, :, :] .+ 
-        derivate[2, :, :, :, :, 1] .* z[2, k, :, :, :, :], 
-        dims=(1, 2, 3) # Regola le dimensioni per mantenere separate le copie se necessario
-    )
-    
-    # Calcolo per la direzione 2
-    c2 = CUDA.sum(
-        derivate[1, :, :, :, :, 2] .* z[1, k, :, :, :, :] .+ 
-        derivate[2, :, :, :, :, 2] .* z[2, k, :, :, :, :], 
-        dims=(1, 2, 3)
-    )
-    
-    return c1, c2
-end
-
 function measure_zero_mode_X(X, Npoint2, mu)
     zero_mode = CUDA.sum(X[:,:,:,mu,:], dims=(2,3)) ./ Npoint2 
 
@@ -232,7 +213,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         ener_meas::CuArray{F, 5} = args.ener_meas
     end
 
-    z_fname::String = "zeromodo_mat_file.mat"
+    #z_fname::String = "zeromodo_mat_file.mat"
     
     n_ords = max_ptord + one(max_ptord)
     Npoint2 = Npoint^2
@@ -243,6 +224,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     sc_buffB        = CuArray{F}(undef, n_ords, Npoint, Npoint, n_copies)
     c_sc_buffA      = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_copies)
     c_sc_buffB      = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_copies)
+    coeff_buffer    = CUDA.zeros(F, I(2), n_ords, Npoint, Npoint, I(2), n_copies)
+    coeff_buf_global = CUDA.zeros(F, I(2), n_ords, I(1), I(1), I(2), n_copies)
 
     # Initialize additional variables 
     z_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
@@ -258,15 +241,15 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     noise_z_Eu = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_comps, n_copies)
     noise_X = CuArray{F}(undef, n_ords, Npoint, Npoint, I(2), n_copies)
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
-    zero_modo_z = CUDA.zeros(F, I(2), n_ords, n_comps, n_copies)
     zero_modo_X = CUDA.zeros(F, n_ords, I(2), n_copies) 
+    derivate = CuArray{F}(undef, I(2), Npoint, Npoint, n_comps, I(2), n_copies)
     
 
 
     energia = CUDA.zeros(F, n_ords, n_copies)
     ener = CUDA.zeros(F, n_ords, Npoint, Npoint, n_copies)
 
-    zeromodo_meas = CuArray{F}(undef, I(2), max_ptord, I(1), I(1), n_comps, n_copies, n_meas)
+    #zeromodo_meas = CuArray{F}(undef, I(2), max_ptord, I(1), I(1), n_comps, n_copies, n_meas)
 
     en_fnames = [en_fname]
     for i in 2:n_copies
@@ -287,7 +270,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     end
     
     # creazione delle funzioni a parametri fissati
-    f_grad_z, f_grad_U, f_ener, f_twist, f_corr_z, f_proj_noise, f_exp, f_gauge, f_apply_gauge, f_zero_X = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
+    f_grad_z, f_grad_U, f_ener, f_twist, f_corr_z, f_proj_noise, f_exp, f_gauge, f_apply_gauge, f_der, f_coeff, f_remove_zero, f_zero_X = create_kernels(F, Npoint, max_ptord, n_comps, n_copies)
 
     # compilazione dei kernel e creazione di struct con i kernel compilati
 
@@ -306,11 +289,20 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     zEu_coor_ker = compile_kernel(f_corr_z, (z_Eu, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
 
     zero_X_ker = compile_kernel(f_zero_X, (X, zero_modo_X), Npoint2, n_copies)
-    
     noise_ker = compile_kernel(f_proj_noise, (noise_z, z, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
     noise_ker_Eu = compile_kernel(f_proj_noise, (noise_z_Eu, z_Eu, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
   
     compute_ener_ker = compile_kernel(f_ener, (z, U, ener, M1, c_sc_buffA, vec_buffer_comp), Npoint2, n_copies)
+    derivate_ker = compile_kernel(f_der, (z, derivate, M1), Npoint2, n_copies)
+    
+    coeff_ker_z = compile_kernel(f_coeff, (z, derivate, coeff_buffer), Npoint2, n_copies)
+    remove_zero_ker = compile_kernel(f_remove_zero, (z, derivate, coeff_buf_global), Npoint2, n_copies)
+
+    coeff_ker_zEu = compile_kernel(f_coeff, (z_Eu, derivate, coeff_buffer), Npoint2, n_copies)
+    remove_zeroEu_ker = compile_kernel(f_remove_zero, (z_Eu, derivate, coeff_buf_global), Npoint2, n_copies)
+
+    coeff_ker_noisez = compile_kernel(f_coeff, (noise_z, derivate, coeff_buffer), Npoint2, n_copies)
+    remove_zeronoise_ker = compile_kernel(f_remove_zero, (noise_z, derivate, coeff_buf_global), Npoint2, n_copies)
 
     run_kernel(M1_ker)
     
@@ -323,6 +315,26 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         println("z_Im al tempo zero: ", z[2, 1, 1, 1, 1, 1])
     end=# 
 
+    # Calcola la derivata covariante del background
+    run_kernel(derivate_ker)
+    
+    # Normalizzazione globale esatta su tutto il reticolo
+    # Sommiamo t (dim 2), x (dim 3) e le componenti (dim 4)
+    CUDA.@sync begin
+        norm_sq = CUDA.sum(
+            derivate[1, :, :, :, :, :].^2 .+ derivate[2, :, :, :, :, :].^2, 
+            dims=(2, 3, 4) 
+        )
+        
+        norm_D = sqrt.(norm_sq)
+        
+        # Broadcasting per dividere tutto l'array (il reshape è automatico su dims 2,3,4)
+        @views derivate[1, :, :, :, :, :] ./= norm_D
+        @views derivate[2, :, :, :, :, :] ./= norm_D
+    end
+    
+    print(current_time(), "Zero-mode spatial derivatives computed and normalized.")
+    println("Simulation is starting...")
 
     # Main computation loop
     for t = args.iter_start:n_meas
@@ -330,13 +342,21 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Genera nuovo rumore gaussiano 
             reset_noise_z!(noise_z, cuda_rng)
             reset_noise_X!(noise_X, cuda_rng)
-            noise_z_Eu .= noise_z
+            #noise_z_Eu .= noise_z
             # Tolgo lo Zero - Mode dal rumore;
             # Sottrai la media spaziale dal rumore appena generato;
             @inbounds @views noise_mean_z = CUDA.sum(noise_z[:,2:2,:,:,:,:], dims=(3, 4)) ./ Npoint2
             @inbounds @views noise_mean_X = CUDA.sum(noise_X[2:2,:,:,:,:], dims=(2, 3)) ./ Npoint2
             @inbounds @views noise_z[:,2:2,:,:,:,:] .-= noise_mean_z
             @inbounds @views noise_X[2:2,:,:,:,:] .-= noise_mean_X
+
+            # Proietta il noise di z nella direzione ortogonale alla propagazione del modo zero
+            run_kernel(coeff_ker_noisez)
+            CUDA.@sync @inbounds @views coeff_buf_global .= CUDA.sum(coeff_buffer, dims=(3, 4))
+            run_kernel(remove_zeronoise_ker)
+
+            noise_z_Eu .= noise_z
+
             run_kernel(noise_ker)
 
             # Calcola -grad_z e -grad_U per lo step di Eulero dopo aver calcolato le radici
@@ -345,9 +365,14 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # Fai gli step di Eulero per i due campi 
             Euler_step_U!(U_Eu, U, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_Eu_ker, zero_X_ker, n_comps, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, n_comps)
-            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
-            CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, :, :] .-= zero_modo_z
+            #CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z_Eu[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
+            #CUDA.@sync @inbounds @views z_Eu[:, 2:end, :, :, :, :] .-= zero_modo_z
+            run_kernel(coeff_ker_zEu)
+            CUDA.@sync @inbounds @views coeff_buf_global .= CUDA.sum(coeff_buffer, dims=(3, 4))
+            run_kernel(remove_zeroEu_ker)
             run_kernel(zEu_coor_ker)
+            
+            # Proietto il rumore su z_Eu !!!
             run_kernel(noise_ker_Eu)
             
             # Calcola ora i gradienti per lo step RK 
@@ -364,16 +389,27 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
                 println("==========================================================")
             end 
 
+            run_kernel(gauge_ker)        # Calcola E
+            run_kernel(apply_gauge_ker)  # Applica E a z e U
+
+            # 2. MODO ZERO: Rimuove lo slittamento spaziale (calcolato nel gauge corretto!)
+            run_kernel(coeff_ker_z)
+            CUDA.@sync @inbounds @views coeff_buf_global .= CUDA.sum(coeff_buffer, dims=(3, 4))
+            run_kernel(remove_zero_ker)
+
+            # 3. NORMALIZZAZIONE: Fissa il raggio in modo algebricamente esatto
+            run_kernel(z_corr_ker)
+
 
             # Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
             # Usiamo 1:1 sulla dimensione 5 per preservare la shape per il broadcasting
-            CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
-            @inbounds @views zeromodo_meas[:,:,:,:,:,:,t] .= zero_modo_z
+            # CUDA.@sync @inbounds @views zero_modo_z = CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
+            # @inbounds @views zeromodo_meas[:,:,:,:,:,:,t] .= zero_modo_z
 
             # Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),
             # SOLO sulla prima componente (1:1), e per tutte le repliche (:)
-            CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
+            # CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
             run_kernel(z_corr_ker)
@@ -432,7 +468,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
 
     # Saving energy site-by-site on matlab file
     save_lattice && save_matlab_energy(lat_fname, Array(ener_meas))
-    save_matlab_energy(z_fname, Array(zeromodo_meas))
+    #save_matlab_energy(z_fname, Array(zeromodo_meas))
     println(current_time(), "All measurements successfully taken.")
     
     return

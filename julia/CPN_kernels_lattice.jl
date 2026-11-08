@@ -911,7 +911,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end 
 
-    function remove_zeromode_kernel!(
+    function compute_coeff_kernel!(
         z::CuDeviceArray{F, 6 ,1}, 
         derivate::CuDeviceArray{F, 5, 1}, 
         coeff_buffer::CuDeviceArray{F, 6, 1}, 
@@ -1003,5 +1003,5 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         return nothing 
     end
 
-    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, compute_derivative_ker!, remove_zeromode_kernel!, zeromode_X_kernel!)
+    return (grad_z_kernel!, grad_U_kernel!, ener_kernel!, init_M1_kernel!, correct_z_kernel!, project_noise_kernel!, ExpU_kernel!, compute_gauge_transform_kernel!, apply_gauge_transform_kernel!, compute_derivative_ker!, compute_coeff_kernel!, remove_zeromode_kernel!, zeromode_X_kernel!)
 end

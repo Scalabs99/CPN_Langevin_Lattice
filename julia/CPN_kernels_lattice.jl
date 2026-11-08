@@ -869,7 +869,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
 
     # Computes the discrete covariant derivative
     function compute_derivative_ker!(
-        z::CuDeviceArray{F, 6, 1}, 
+        z::CuDeviceArray{F, 6, 1},
+        U::CuDeviceArray{F, 6, 1},
         derivate::CuDeviceArray{F, 6, 1}, 
         M1::CuDeviceArray{F, 7, 1}
     )
@@ -887,8 +888,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                 end
 
                 for n::I = 1:n_comps 
-                    @inbounds U_re = U[I(1), i, k, mu, c] # (o con gli indici corretti per U)
-                    @inbounds U_im = U[I(2), i, k, mu, c]
+                    @inbounds U_re = U[I(1), I(1), i, k, mu, c] # (o con gli indici corretti per U)
+                    @inbounds U_im = U[I(2), I(1), i, k, mu, c]
                     @inbounds M1_re = M1[I(1), I(1), i, k, mu, n, c]
                     @inbounds M1_im = M1[I(2), I(1), i, k, mu, n, c]
                     @inbounds z_re_fwd = z[I(1), I(1), i_fwd, k_fwd, n, c]

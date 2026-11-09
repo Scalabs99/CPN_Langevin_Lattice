@@ -328,6 +328,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         # le dimensioni su cui sommo
         
         norm_D = sqrt.(norm_sq)
+
+        # Salvavita per evitare di divider per zero 
+        norm_D .= max.(norm_D, F(1e-14))
         
         # Broadcasting per dividere tutto l'array (il reshape è automatico su dims 2,3,4)
         @views derivate[1, :, :, :, :, :] ./= norm_D

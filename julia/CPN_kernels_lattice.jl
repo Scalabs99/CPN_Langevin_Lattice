@@ -676,7 +676,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
     # Ebar * E = 1 fissa la parte reale ( fai il conto con lo sviluppo perturbativo)
     # Im(v_bar * z') = 0 !! ( dove z' è il trasformato di gauge del vettore z sviluppato e con 
     # |z(x)|^2 = 1)
-    #=function compute_gauge_transform_kernel!(
+    function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
         E_field::CuDeviceArray{F, 5, 1} 
     )
@@ -728,57 +728,8 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end
         end
         return nothing
-    end=#
-    
-    # Calcola la trasformazione di gauge imponendo E * E_bar = 1 e Im(v_bar * z')=0
-    function compute_gauge_transform_kernel!(
-        z::CuDeviceArray{F, 6, 1},
-        E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo ?? 
-    )
-        i, k, c = get_indexes()
-        if (i <= Npoint && k <= Npoint && c <= n_copies)
-            # All'ordine 0, la trasformazione è l'identità (non tocchiamo il vuoto)
-            @inbounds E_field[I(1), I(1), i, k, c] = one(F)
-            @inbounds E_field[I(2), I(1), i, k, c] = zero(F)
-            
-            # Leggiamo il background classico (ordine 1 nell'array)
-            @inbounds nu_N_re = z[I(1), I(1), i, k, n_comps, c]
-            @inbounds nu_N_im = z[I(2), I(1), i, k, n_comps, c]
-            nu_N_sq = nu_N_re^2 + nu_N_im^2
-            
-            # Costruiamo E ricorsivamente ordine per ordine
-            for j::I = 2:n_ptords
-                # 1. Condizione di unitarità (fissa la parte reale di E)
-                S_val = zero(F)
-                for l::I = 2:(j-1)
-                    @inbounds E1_re = E_field[I(1), l, i, k, c]
-                    @inbounds E1_im = E_field[I(2), l, i, k, c]
-                    @inbounds E2_re = E_field[I(1), j-l+I(1), i, k, c]
-                    @inbounds E2_im = -E_field[I(2), j-l+I(1), i, k, c] # complesso coniugato
-                    S_val += E1_re * E2_re - E1_im * E2_im
-                end
-                @inbounds E_field[I(1), j, i, k, c] = -F(0.5) * S_val # Fai i conti con gli sviluppi !! 
-                
-                # 2. Condizione di Gauge Cooling (fissa la parte immaginaria di E)
-                K_re = zero(F)
-                K_im = zero(F)
-                for l::I = 1:(j-1)
-                    @inbounds El_re = E_field[I(1), l, i, k, c]
-                    @inbounds El_im = E_field[I(2), l, i, k, c]
-                    @inbounds z_re = z[I(1), j-l+I(1), i, k, n_comps, c]
-                    @inbounds z_im = z[I(2), j-l+I(1), i, k, n_comps, c]
-                    
-                    K_re += El_re * z_re - El_im * z_im # K è il pezzo del prodotto che non dipende dal E^(j)
-                    K_im += El_im * z_re + El_re * z_im
-                end
-                
-                im_part = nu_N_re * K_im - nu_N_im * K_re
-                @inbounds E_field[I(2), j, i, k, c] = - im_part / nu_N_sq
-            end
-        end
-        return nothing
     end
-
+    
     function apply_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
         U_mu::CuDeviceArray{F, 6, 1},

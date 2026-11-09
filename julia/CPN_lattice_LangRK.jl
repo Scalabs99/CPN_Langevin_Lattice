@@ -461,7 +461,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             return
         end
     end
-    
+
+
+
     # Final cleanup and file operations
     for i in 1:n_copies
         close(mean_energy_files[i])
@@ -475,6 +477,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     #save_matlab_energy(z_fname, Array(zeromodo_meas))
     println(current_time(), "All measurements successfully taken.")
     
+    # Salva l'ultimo z per fare tutti gli esperimenti del caso
+    serialize("z_diagnostica_step_$(t).jls", Array(z))
+
     return
 end
 

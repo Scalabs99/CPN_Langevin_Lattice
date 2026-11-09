@@ -323,8 +323,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     CUDA.@sync begin
         norm_sq = CUDA.sum(
             derivate[1, :, :, :, :, :].^2 .+ derivate[2, :, :, :, :, :].^2, 
-            dims=(2, 3, 4) 
-        )
+            dims=(1, 2, 3)  
+        ) # Julia fa riduzione delle dimensioni quando scrivo [1,:,:,:,:,:] quindi devo cambiare 
+        # le dimensioni su cui sommo
         
         norm_D = sqrt.(norm_sq)
         

@@ -676,7 +676,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
     # Ebar * E = 1 fissa la parte reale ( fai il conto con lo sviluppo perturbativo)
     # Im(v_bar * z') = 0 !! ( dove z' è il trasformato di gauge del vettore z sviluppato e con 
     # |z(x)|^2 = 1)
-    function compute_gauge_transform_kernel!(
+    #=function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
         E_field::CuDeviceArray{F, 5, 1} 
     )
@@ -728,8 +728,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             end
         end
         return nothing
-    end
+    end=#
     
+    # Calcola la trasformazione di gauge imponendo E * E_bar = 1 e Im(v_bar * z')=0
     function compute_gauge_transform_kernel!(
         z::CuDeviceArray{F, 6, 1},
         E_field::CuDeviceArray{F, 5, 1} # Useremo c_sc_buffA per questo ?? 

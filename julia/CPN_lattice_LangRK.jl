@@ -460,6 +460,13 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             execute_self(args.checkpt_fname)
             return
         end
+
+        if t == n_meas 
+            # Salva l'ultimo z per fare tutti gli esperimenti del caso
+            serialize("z_diagnostica_step_$(t).jls", Array(z))
+            # Salva l'ultimo U per fare tutti gli esperimenti del caso 
+            serialize("U_diagnostica_step_$(t).jls", Array(U))
+        end 
     end
 
 
@@ -477,10 +484,6 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     #save_matlab_energy(z_fname, Array(zeromodo_meas))
     println(current_time(), "All measurements successfully taken.")
     
-    # Salva l'ultimo z per fare tutti gli esperimenti del caso
-    serialize("z_diagnostica_step_$(t).jls", Array(z))
-    # Salva l'ultimo U per fare tutti gli esperimenti del caso 
-    serialize("U_diagnostica_step_$(t).jls", Array(U))
 
     return
 end

@@ -136,7 +136,7 @@ function RK_evolution_U!(
     # Lancia il kernel per la moltiplicazione sul gruppo Exp(iX) 
     compute_exponential!(ExpU_ker)
 
-    U .= U_temp
+    @inbounds @views U[:,2:end,:,:,:,:] .= U_temp[:,2:end,:,:,:,:]
     
     return nothing 
 end 

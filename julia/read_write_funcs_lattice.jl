@@ -94,10 +94,10 @@ function load_C_config(::Type{F}, vac_fname::String, Npoint::I, N_colors::I) whe
         
         nu_cpu[1, :, :, N_colors] .= F(1)
         U_cpu[1, :, :, :] .= F(1)
-        phase = F(2.0 * pi * (N_colors - 1) / N_colors)
+        #phase = F(2.0 * pi * (N_colors - 1) / N_colors)
         
-        U_cpu[1, Npoint, :, 1] .= F(cos(phase))
-        U_cpu[2, Npoint, :, 1] .= F(-sin(phase))
+        #U_cpu[1, Npoint, :, 1] .= F(cos(phase))
+        #U_cpu[2, Npoint, :, 1] .= F(-sin(phase))
         
         return nu_cpu, U_cpu
     end

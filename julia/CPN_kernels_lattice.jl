@@ -347,7 +347,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
     end
 
     function init_M1_kernel!(M1::CuDeviceArray{F, 7, 1}) 
-        
+        # Al momento non mi interesso del twist. La matrice M1 diventa l'identità. 
         i, k, c = get_indexes() 
         
         if (i <= Npoint && k <= Npoint && c <= n_copies)
@@ -365,11 +365,11 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
             for mu::I = 1:2
                 for n::I = 1:N_colors
                     # Calcolo della fase: in Julia n va da 1 a N_colors, nel C era k da 0 a N-1
-                    phase = F(2.0 * pi * (n - 1) / N_colors)
-                    re_phase = cos(phase)
-                    im_phase = sin(phase)
+                    #phase = F(2.0 * pi * (n - 1) / N_colors)
+                    #re_phase = cos(phase)
+                    #im_phase = sin(phase)
                     
-                    if i == Npoint && mu == 1 # Corrisponde a x0 == Lt - 1 e mu == 0 nel C
+                    #=if i == Npoint && mu == 1 # Corrisponde a x0 == Lt - 1 e mu == 0 nel C
                         @inbounds M1[I(1), I(1), i, k, mu, n, c] = re_phase
                         @inbounds M1[I(2), I(1), i, k, mu, n, c] = im_phase
                         
@@ -377,7 +377,9 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
                         @inbounds M1[I(1), I(1), i, k, mu, n, c] = one(F)
                         @inbounds M1[I(2), I(1), i, k, mu, n, c] = zero(F)
 
-                    end
+                    end=#
+                    @inbounds M1[I(1), I(1), i, k, mu, n, c] = one(F)
+                    @inbounds M1[I(2), I(1), i, k, mu, n, c] = zero(F)
                 end
             end
         end

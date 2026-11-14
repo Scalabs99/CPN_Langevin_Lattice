@@ -2,29 +2,35 @@
 
 config_path="/leonardo/home/userexternal/dscalabr/CPN_Langevin_Lattice"
 base_config_fname="sample_configuration_lattice.toml"
-checkpt_path="/hpc/home/nome.cognome/CPN_Langevin_Lattice/checkpoint"
+checkpt_path="/leonardo_scratch/large/userexternal/dscalabr/CPN_PBC/checkpoint"
+
+energies_dir="/leonardo_scratch/large/userexternal/dscalabr/CPN_PBC/energies"
+matlab_dir="/leonardo_scratch/large/userexternal/dscalabr/CPN_PBC/energy_site_by_site"
 
 source configuration.conf
 
+N_COMPS="3" # Numero di componenti indipendenti ( quindi sarebbe N-1 )
 # Assicurati che le cartelle per i log e le configurazioni generate esistano
 mkdir -p logs
-mkdir -p "$config_path/generated_configs"
+mkdir -p "$config_path/generated_configs$N_COMPS"
 
 # Definisci qui la lista dei valori di dt che vuoi simulare
 DT_VALUES=("0.001" "0.002" "0.005" "0.007" "0.010")
+N_COPIES="5"
 
 for dt in "${DT_VALUES[@]}"; do
     # Nome del nuovo file .toml specifico per questo dt
-    new_config_fname="config_dt_${dt}.toml"
-    new_config_fullpath="$config_path/generated_configs/$new_config_fname"
+    new_config_fname="config_CP${N_COMPS}_dt_${dt}.toml"
+    new_config_fullpath="$config_path/generated_configs$N_COMPS/$new_config_fname"
 
     # Crea il nuovo .toml sostituendo dt e differenziando i file di output
     sed -e "s/^\(dt\s*=\s*\)[0-9.eE+-]*/\1${dt}/" \
-        -e "s|energies/energy.txt|energies/energy_dt_${dt}.txt|" \
-        -e "s|checkpoint/checkpoint.jld|checkpoint/checkpoint_dt_${dt}.jld|" \
-        -e "s|file.mat|file_dt_${dt}.mat|" \
+        -e "s/^\(n_indep_comps\s*=\s*\)[0-9]*/\1${N_COMPS}/" \
+        -e "s/^\(n_copies\s*=\s*\)[0-9]*/\1${N_COPIES}/" \
+        -e "s|^\(energy_filename\s*=\s*\)\"[^\"]*\"|\1\"${energies_dir}/energy_CP${N_COMPS}_dt_${dt}.txt\"|" \
+        -e "s|^\(checkpoint_filename\s*=\s*\)\"[^\"]*\"|\1\"${checkpt_path}/checkpoint_CP${N_COMPS}_dt_${dt}.jld\"|" \
+        -e "s|^\(energy_site_by_site_matlab\s*=\s*\)\"[^\"]*\"|\1\"${matlab_dir}/file_CP${N_COMPS}_dt_${dt}.mat\"|" \
         "$config_path/$base_config_fname" > "$new_config_fullpath"
-
     # Nome del job su SLURM
     name=$(date +%Y-%m-%d_%H:%M)"_dt_${dt}"
 

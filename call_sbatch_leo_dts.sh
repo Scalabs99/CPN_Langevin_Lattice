@@ -49,6 +49,16 @@ for dt in "${DT_VALUES[@]}"; do
              --mail-type=ALL
     )
 
-    echo "Sottomissione job per dt = $dt con config: $new_config_fname"
-    sbatch "${SBATCH_OPTS[@]}" job_sbatch.bash start "$new_config_fullpath"
+    checkpt_fname="checkpoint_CP${N_COMPS}_dt_${dt}.jld"
+
+    if [ -f "$checkpt_path/$checkpt_fname" ]; then
+        echo "Trovato checkpoint per dt = $dt, sottomissione in modalità RESUME."
+        # Passiamo 'resume' e il percorso COMPLETO del checkpoint
+        sbatch "${SBATCH_OPTS[@]}" job_sbatch.bash resume "$checkpt_path/$checkpt_fname"
+    else
+        echo "Nessun checkpoint per dt = $dt, sottomissione da zero (START)."
+        # Passiamo 'start' e il percorso COMPLETO della configurazione
+        sbatch "${SBATCH_OPTS[@]}" job_sbatch.bash start "$new_config_fullpath"
+    fi
+done
 done

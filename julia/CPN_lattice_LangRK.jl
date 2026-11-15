@@ -328,7 +328,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             Euler_step_U!(U_Eu, U, gradient_U, noise_X, dt, X, zero_modo_X, ExpU_Eu_ker, zero_modeX_ker, N_colors, Npoint2)
             Euler_step_z!(z, z_Eu, noise_z, gradient_z, dt, N_colors)
 
-            CUDA.@sync @inbounds @views zero_modo_zEu .= CUDA.sum(z_Eu[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
+            # Posso calcolarlo tutto il modo zero, tanto poi la funzione lo sottrae solo da j=2 in poi
+            CUDA.@sync @inbounds @views zero_modo_zEu .= CUDA.sum(z_Eu[:, :, :, :, :, :], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
             run_kernel(zero_modezEu_ker)
             
             # Calcola ora i gradienti per lo step RK 
@@ -337,7 +338,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             RK_evolution_z!(z, noise_z, gradz_Eu, dt, gradient_z , N_colors)
 
             # 1. Calcola la media (il modo zero) lungo spazio (dim 3) e tempo (dim 4)
-            CUDA.@sync @inbounds @views zero_modo_z .= CUDA.sum(z[:, 2:end, :, :, :, :], dims=(3, 4)) ./ Npoint2
+            # Posso calcolarlo tutto il modo zero, tanto poi la funzione lo sottrae solo da j=2 in poi
+            CUDA.@sync @inbounds @views zero_modo_z .= CUDA.sum(z[:, :, :, :, :, :], dims=(3, 4))[:,:,1,1,:,:] ./ Npoint2
             run_kernel(zero_modez_ker)
             # 2. Sottrai il modo zero in-place 
             # Avviene per: parte reale e imm (:), ordini > 0 (2:end), su tutto il reticolo (:),

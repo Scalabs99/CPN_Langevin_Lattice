@@ -755,7 +755,7 @@ function create_kernels(::Type{F}, Npoint::I, max_ptord::I, n_comps::I, n_copies
         i, k, c = get_indexes()
         if (i <= Npoint && k <= Npoint && c <= n_copies)
             for n::I = 1:n_comps
-                for j::I = 1:n_ptords
+                for j::I = 2:n_ptords
                     @inbounds z[I(1),j,i,k,n,c] -= zero_modo_z[I(1), j, n, c]
                     @inbounds z[I(2),j,i,k,n,c] -= zero_modo_z[I(2), j, n, c]
                 end 

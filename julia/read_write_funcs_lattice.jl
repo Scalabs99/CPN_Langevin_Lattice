@@ -62,7 +62,8 @@ function save_state(fname::String, args)
         "iter_start"   => args.iter_start,
         "z"            => Array(args.z),
         "U"            => Array(args.U),
-        "ener_meas"    => args.ener_meas === nothing ? nothing : Array(args.ener_meas)
+        "ener_meas"    => args.ener_meas === nothing ? nothing : Array(args.ener_meas),
+        "rng_state"    => args.cuda_rng 
     )
     serialize(fname, cpu_data)
     println(current_time(), "State saved safely to file \"" * fname * "\"")

@@ -379,6 +379,10 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             return
         end
     end
+
+    # Salva il checkpoint anche se la simulazion è finita in tempo 
+    println("[INFO]: Simulazione completata (n_meas raggiunto). Salvataggio stato finale in corso...")
+    save_state(args.checkpt_fname, args)
     
     # Final cleanup and file operations
     for i in 1:n_copies
@@ -468,7 +472,15 @@ function resume_main_Lang(checkpt_fname::String)
     
     # 1. Ricarica la configurazione di base partendo dal TOML
     conf = parse_config_file(config_fname)
-    cuda_rng = conf.cuda_seed == 0 ? CUDA.RNG() : CUDA.RNG(conf.cuda_seed)
+    # --- SOSTITUISCI LA VECCHIA INIZIALIZZAZIONE DI cuda_rng CON QUESTO BLOCCO ---
+    if haskey(cpu_data, "rng_state")
+        cuda_rng = cpu_data["rng_state"]
+    else
+        # Fallback sicuro nel caso di resume da vecchi file sprovvisti di rng_state
+        cuda_rng = conf.cuda_seed == 0 ? CUDA.RNG() : CUDA.RNG(conf.cuda_seed + cpu_data["iter_start"])
+    end
+    
+    #cuda_rng = conf.cuda_seed == 0 ? CUDA.RNG() : CUDA.RNG(conf.cuda_seed)
     floatType = typeof(conf.dt)
     n_ords = conf.max_ptord + one(conf.max_ptord)
     N_colors = conf.n_comps + one(conf.n_comps)

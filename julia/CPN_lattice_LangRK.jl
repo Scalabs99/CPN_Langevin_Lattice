@@ -185,6 +185,18 @@ function measure_zero_mode_X(X, Npoint2, mu)
     return Array(zero_mode)
 end 
 
+function measure_gauge_norm(E, Npoint2)
+    @views abs_gauge = sqrt.(
+        E[1,:,:,:,:].^2 .+ 
+        E[2,:,:,:,:].^2
+    )
+
+    abs_gauge_mean = CUDA.sum(abs_gauge, dims=(2,3)) ./ Npoint2
+
+    return Array(dropdims(abs_gauge_mean, dims=(2, 3)))
+
+end 
+
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
     
     # Print some logging information
@@ -243,6 +255,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     M1 = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, I(2), n_comps, n_copies)
     zero_modo_X = CUDA.zeros(F, n_ords, I(2), n_copies) 
     derivate = CuArray{F}(undef, I(2), Npoint, Npoint, n_comps, I(2), n_copies)
+    E_gauge = CuArray{F}(undef, I(2), n_ords, Npoint, Npoint, n_copies)
     
 
 
@@ -280,8 +293,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     gradker_U = compile_kernel(f_grad_U, (gradient_U, U, z, M1, c_sc_buffB, vec_buffer_comp), Npoint2, n_copies)
     ExpU_ker = compile_kernel(f_exp, (X, Exp_buffer, U, U_temp, sc_buffA, sc_buffB), Npoint2, n_copies)
     z_corr_ker = compile_kernel(f_corr_z, (z, sc_buffA, vec_buffer_comp), Npoint2, n_copies)
-    gauge_ker = compile_kernel(f_gauge, (z, c_sc_buffA), Npoint2, n_copies)
-    apply_gauge_ker = compile_kernel(f_apply_gauge, (z, U, c_sc_buffA, vec_buffer_comp, U_temp), Npoint2, n_copies)
+    gauge_ker = compile_kernel(f_gauge, (z, E_gauge), Npoint2, n_copies)
+    apply_gauge_ker = compile_kernel(f_apply_gauge, (z, U, E_gauge, vec_buffer_comp, U_temp), Npoint2, n_copies)
         
     gradker_z_Eu = compile_kernel(f_grad_z, (z_Eu, U_Eu, gradz_Eu, M1, vec_buffer_comp, c_sc_buffA), Npoint2, n_copies)
     gradker_U_Eu = compile_kernel(f_grad_U, (gradU_Eu, U_Eu, z_Eu, M1, c_sc_buffB, vec_buffer_comp), Npoint2, n_copies)
@@ -384,17 +397,23 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             RK_evolution_U!(U, U_temp, gradU_Eu, gradient_U, dt, X, zero_modo_X, noise_X, ExpU_ker, zero_X_ker, n_comps, Npoint2)
             RK_evolution_z!(z, noise_z, noise_z_Eu, gradz_Eu, dt, gradient_z , n_comps)
 
-            for i::I = 1:n_comps
+            #=for i::I = 1:n_comps
                 println("zero modo z pre sottrazione ogni ordine componente $i: ", measure_zero_mode_z(z, Npoint2, i))
                 println("==========================================================")
             end 
             for mu::I = 1:2
                 println("zero modo X pre sottrazione ordine ogni componente $mu: ", measure_zero_mode_X(X, Npoint2, mu))
                 println("==========================================================")
-            end 
+            end=#
+
+            compute_energy!(energia, ener, Npoint2, compute_ener_ker)
+            println("Energia prima della trasformazione di gauge: ", Array(energia))
 
             run_kernel(gauge_ker)        # Calcola E
             run_kernel(apply_gauge_ker)  # Applica E a z e U
+
+            norms = measure_gauge_norm(E_gauge, Npoint2)
+            println("Step $t - Max norm per ordine: ", maximum(norms, dims=2)[:])
 
             # 2. MODO ZERO: Rimuove lo slittamento spaziale (calcolato nel gauge corretto!)
             run_kernel(coeff_ker_z)
@@ -416,15 +435,14 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             # CUDA.@sync @inbounds @views z[:, 2:end, :, :, :, :] .-= zero_modo_z
             #println("Dopo sottrazione modo zero: ", measure_zero_mode_z(z, Npoint2))
 
-            run_kernel(z_corr_ker)
-            for i::I = 1:n_comps
+            #=for i::I = 1:n_comps
                 println("zero modo z post norm ogni ordine componente $i: ", measure_zero_mode_z(z, Npoint2, i))
                 println("==========================================================")
             end 
             for mu::I = 1:2
                 println("zero modo X ogni ordine ogni componente $mu: ", measure_zero_mode_X(X, Npoint2, mu))
                 println("==========================================================")
-            end 
+            end=#
             
             #=if t <= 3
                 println("[DIAGNOSTICA] Salvataggio del tensore z per lo step $t...")
@@ -436,6 +454,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         end
         
         compute_energy!(energia, ener, Npoint2, compute_ener_ker)
+
+        println("Energia dopo la trasformazione di gauge: ", Array(energia))
            
         
         # Store energy measurements if saving lattice

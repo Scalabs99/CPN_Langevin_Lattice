@@ -197,6 +197,13 @@ function measure_gauge_norm(E, Npoint2)
 
 end 
 
+function measure_ImU(U, Npoint2)
+    # Indice 1 = 2 (parte immaginaria), indice 2 = 2 (ordine 1), indice 6 = 1 (copia 1)
+    # Lo slice ha forma (Npoint, Npoint, 2), quindi sommiamo sulle nuove dims=(1, 2)
+    @views mean_Uim = CUDA.sum(U[2, 2, :, :, :, 1], dims=(1, 2)) ./ Npoint2
+    return vec(Array(mean_Uim))
+end
+
 function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Integer}
     
     # Print some logging information
@@ -226,6 +233,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
     end
 
     #z_fname::String = "zeromodo_mat_file.mat"
+    U_fname::String = "UIm_1.txt"
     
     n_ords = max_ptord + one(max_ptord)
     Npoint2 = Npoint^2
@@ -275,11 +283,13 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         for i in 2:n_copies
             push!(mean_energy_files, open_energy_file(en_fnames[i], "w", true))
         end
+        U_file = open(U_fname, "w")
     else
         mean_energy_files = [open_energy_file(en_fname, "a", false)] # without header, appending
         for i in 2:n_copies
             push!(mean_energy_files, open_energy_file(en_fnames[i], "a", false))
         end
+        U_file = open(U_fname, "a")
     end
     
     # creazione delle funzioni a parametri fissati
@@ -468,6 +478,9 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         for i in 1:n_copies
             @inbounds @views write_line(mean_energy_files[i], Array(energia[:, i]))
         end
+
+        write_line(U_fname, measure_ImU(U, Npoint2))
+
         args.iter_start = t + 1
         
         end_time = SIM_START_TIME + get_seconds(args.max_execution_time)
@@ -498,6 +511,8 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         n_copies > 1 && print("of copy $i ")
         println("written to file: ", en_fnames[i])
     end
+
+    close(U_fname)
 
     # Saving energy site-by-site on matlab file
     save_lattice && save_matlab_energy(lat_fname, Array(ener_meas))

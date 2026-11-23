@@ -479,7 +479,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
             @inbounds @views write_line(mean_energy_files[i], Array(energia[:, i]))
         end
 
-        write_line(U_fname, measure_ImU(U, Npoint2))
+        write_line(U_file, measure_ImU(U, Npoint2))
 
         args.iter_start = t + 1
         

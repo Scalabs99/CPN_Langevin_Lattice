@@ -512,7 +512,7 @@ function main_Lang(args::LangRK_args{F, I}) where {F <: AbstractFloat, I <: Inte
         println("written to file: ", en_fnames[i])
     end
 
-    close(U_fname)
+    close(U_file)
 
     # Saving energy site-by-site on matlab file
     save_lattice && save_matlab_energy(lat_fname, Array(ener_meas))
